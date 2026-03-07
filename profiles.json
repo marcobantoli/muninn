@@ -1,0 +1,275 @@
+[
+  {
+    "id": "seed-sarah-001",
+    "name": "Sarah Mitchell",
+    "relationship": "Daughter",
+    "identity_summary": "Sarah is your eldest daughter. She is 42 and lives in Portland with her husband Mark.",
+    "hobbies": [
+      "gardening",
+      "reading mystery novels",
+      "baking sourdough bread"
+    ],
+    "pride_points": [
+      "She recently got promoted to head teacher at Westfield Elementary",
+      "She ran her first half-marathon last spring"
+    ],
+    "emotional_anchors": [
+      "She used to sit on your lap while you read her bedtime stories",
+      "You both love watching old movies together on Sunday evenings"
+    ],
+    "conversation_starters": [
+      "How are the roses in your garden doing?",
+      "Have you read any good books lately?",
+      "How is Mark doing?"
+    ],
+    "communication_tips": [
+      "She appreciates when you listen to her stories",
+      "She may talk about school — she loves teaching"
+    ],
+    "createdAt": "2026-03-07T18:46:09.307Z",
+    "updatedAt": "2026-03-07T18:46:09.307Z"
+  },
+  {
+    "id": "seed-james-002",
+    "name": "James Wilson",
+    "relationship": "Son",
+    "identity_summary": "James is your son. He is 38 and works as a software engineer in Seattle.",
+    "hobbies": [
+      "playing guitar",
+      "hiking",
+      "cooking Italian food"
+    ],
+    "pride_points": [
+      "He built an app that helps seniors stay connected",
+      "He volunteers at the local food bank every weekend"
+    ],
+    "emotional_anchors": [
+      "You taught him to ride a bike in the backyard when he was 6",
+      "He still makes your favorite pasta recipe every time he visits"
+    ],
+    "conversation_starters": [
+      "Have you been on any good hikes recently?",
+      "Are you still playing guitar?",
+      "What are you cooking these days?"
+    ],
+    "communication_tips": [
+      "He likes talking about technology but keeps it simple for you",
+      "He may seem busy but always makes time for calls"
+    ],
+    "createdAt": "2026-03-07T18:46:09.307Z",
+    "updatedAt": "2026-03-07T18:46:09.307Z"
+  },
+  {
+    "id": "seed-margaret-003",
+    "name": "Margaret Chen",
+    "relationship": "Best Friend",
+    "identity_summary": "Margaret has been your best friend for over 40 years. You met at the community center.",
+    "hobbies": [
+      "watercolor painting",
+      "tai chi",
+      "bird watching"
+    ],
+    "pride_points": [
+      "She won the community art fair last year",
+      "She organized the neighborhood watch program"
+    ],
+    "emotional_anchors": [
+      "You and Margaret went on a road trip to California in 1985",
+      "She was there when your grandchildren were born"
+    ],
+    "conversation_starters": [
+      "Have you painted anything new lately?",
+      "Did you see any interesting birds this week?",
+      "How is your tai chi class going?"
+    ],
+    "communication_tips": [
+      "She is patient and understanding",
+      "She enjoys reminiscing about old times"
+    ],
+    "createdAt": "2026-03-07T18:46:09.307Z",
+    "updatedAt": "2026-03-07T18:46:09.307Z"
+  },
+  {
+    "id": "seed-drpatel-004",
+    "name": "Dr. Anand Patel",
+    "relationship": "Doctor",
+    "identity_summary": "Dr. Patel is your primary care physician. He has been your doctor for 12 years.",
+    "hobbies": [
+      "chess",
+      "classical music",
+      "traveling"
+    ],
+    "pride_points": [
+      "He received the community healthcare excellence award",
+      "He speaks four languages fluently"
+    ],
+    "emotional_anchors": [
+      "He always takes extra time to explain things clearly",
+      "He remembers details about your family and asks about them"
+    ],
+    "conversation_starters": [
+      "Have you traveled anywhere interesting recently?",
+      "Do you still play chess?",
+      "How is the clinic doing?"
+    ],
+    "communication_tips": [
+      "He prefers if you write down questions before appointments",
+      "He is happy to repeat information if needed"
+    ],
+    "createdAt": "2026-03-07T18:46:09.307Z",
+    "updatedAt": "2026-03-07T18:46:09.307Z"
+  },
+  {
+    "id": "9cc1fff8-8c9d-4840-8274-3e667009b64a",
+    "name": "test",
+    "relationship": "friend",
+    "identity_summary": "test",
+    "hobbies": [
+      "test"
+    ],
+    "pride_points": [
+      "test"
+    ],
+    "emotional_anchors": [
+      "test"
+    ],
+    "conversation_starters": [
+      "test"
+    ],
+    "communication_tips": [
+      "test"
+    ],
+    "faceDescriptor": [
+      -0.2009972333908081,
+      0.19749075174331665,
+      0.08035116642713547,
+      -0.04185428097844124,
+      -0.03322812542319298,
+      0.008128110319375992,
+      0.01970203034579754,
+      -0.03230063244700432,
+      0.16992610692977905,
+      -0.020463302731513977,
+      0.2403964400291443,
+      -0.03018883988261223,
+      -0.19928216934204102,
+      -0.09969039261341095,
+      0.02709393948316574,
+      0.12685802578926086,
+      -0.19114026427268982,
+      -0.20886892080307007,
+      -0.06109759211540222,
+      -0.0832708403468132,
+      0.04225078597664833,
+      -0.027516713365912437,
+      -0.07409443706274033,
+      0.12666212022304535,
+      -0.12422019243240356,
+      -0.2888592481613159,
+      0.027355246245861053,
+      -0.181288480758667,
+      0.022323625162243843,
+      -0.1844029277563095,
+      -0.02272096276283264,
+      -0.03289826214313507,
+      -0.22759005427360535,
+      -0.032697226852178574,
+      -0.1023683175444603,
+      0.0384061224758625,
+      0.003532756119966507,
+      -0.06306607276201248,
+      0.11260916292667389,
+      -0.003254282521083951,
+      -0.1252705603837967,
+      -0.06295601278543472,
+      -0.02202444337308407,
+      0.27894508838653564,
+      0.20827758312225342,
+      -0.03571408614516258,
+      -0.02960396744310856,
+      0.023219479247927666,
+      -0.02191789075732231,
+      -0.21792694926261902,
+      -0.0007318836287595332,
+      0.16167332231998444,
+      0.1253039836883545,
+      0.07740286737680435,
+      -0.026294197887182236,
+      -0.14863578975200653,
+      -0.037715304642915726,
+      0.03732230141758919,
+      -0.19894936680793762,
+      0.04918156564235687,
+      0.046465061604976654,
+      -0.08627619594335556,
+      -0.04441741108894348,
+      -0.061111900955438614,
+      0.29373899102211,
+      0.12071539461612701,
+      -0.1226506158709526,
+      -0.11282049864530563,
+      0.12854763865470886,
+      -0.09890162199735641,
+      -0.08012934029102325,
+      0.011374564841389656,
+      -0.09634213149547577,
+      -0.14929838478565216,
+      -0.23099033534526825,
+      0.12841805815696716,
+      0.2997620701789856,
+      0.12818603217601776,
+      -0.21815215051174164,
+      -0.0008186878403648734,
+      -0.21161898970603943,
+      -0.011861488223075867,
+      -0.04224530979990959,
+      0.00010754936374723911,
+      -0.09034090489149094,
+      -0.014662772417068481,
+      -0.12168917059898376,
+      0.03600102663040161,
+      0.12919893860816956,
+      0.06640838831663132,
+      -0.015118938870728016,
+      0.15757504105567932,
+      -0.06179710850119591,
+      -0.1018751859664917,
+      0.0043788631446659565,
+      0.006092764902859926,
+      -0.07915607839822769,
+      0.035935599356889725,
+      -0.08373744785785675,
+      -0.049169208854436874,
+      -0.020138662308454514,
+      -0.0927181988954544,
+      -0.020958323031663895,
+      0.12702147662639618,
+      -0.18819253146648407,
+      0.08329018205404282,
+      0.041926637291908264,
+      -0.02322261780500412,
+      -0.0330670028924942,
+      0.057231124490499496,
+      -0.13265743851661682,
+      -0.06805907934904099,
+      0.15808117389678955,
+      -0.20427864789962769,
+      0.2144833356142044,
+      0.17900539934635162,
+      0.11068315804004669,
+      0.1316555291414261,
+      0.06771086156368256,
+      0.06313245743513107,
+      -0.02431022934615612,
+      -0.019788971170783043,
+      -0.1304159313440323,
+      -0.0069805593229830265,
+      0.08272061496973038,
+      -0.028242910280823708,
+      0.06329713016748428,
+      0.06704011559486389
+    ],
+    "createdAt": "2026-03-07T18:46:48.249Z",
+    "updatedAt": "2026-03-07T18:46:48.249Z"
+  }
+]

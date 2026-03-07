@@ -1,0 +1,30 @@
+{
+    "compilerOptions": {
+        "target": "ES2020",
+        "module": "commonjs",
+        "moduleResolution": "node",
+        "outDir": "dist-electron",
+        "rootDir": ".",
+        "jsx": "react-jsx",
+        "strict": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "resolveJsonModule": true,
+        "composite": false,
+        "declaration": false,
+        "sourceMap": true,
+        "baseUrl": ".",
+        "paths": {
+            "@shared/*": [
+                "shared/*"
+            ]
+        }
+    },
+    "include": [
+        "electron",
+        "backend",
+        "shared",
+        "vision",
+        "frontend"
+    ]
+}
