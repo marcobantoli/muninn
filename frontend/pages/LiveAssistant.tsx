@@ -1,12 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { FaceBoundingBox, GazePoint, PersonhoodNote, AppState } from '../../shared/types';
-import { startScreenCapture, stopScreenCapture, captureFrame, getVideoElement } from '../../vision/screenCapture';
-import { beginGazeCalibration, initGazeTracking, getLatestGaze, onCalibrationComplete, stopGazeTracking } from '../../vision/gazeTracking';
+import { PersonhoodNote, AppState } from '../../shared/types';
+import { startScreenCapture, stopScreenCapture, getVideoElement } from '../../vision/screenCapture';
 import { detectFaces, initFaceDetection } from '../../vision/faceDetection';
 import {
-    processGazeFaceIntersection, onRecognition, resetRecognitionEngine,
-    simulateHeartRate, getHeartRate, setHcpMode, isHcpMode, getDwellProgress,
-    updateFaceMatcher
+    processFacePresence, onRecognition, resetRecognitionEngine,
+    simulateHeartRate, setHcpMode, getDwellProgress,
+    updateFaceMatcher, FaceScreenPosition
 } from '../../vision/recognitionEngine';
 import { PersonhoodCard } from '../components/PersonhoodCard';
 import { BiometricPanel } from '../components/BiometricPanel';
@@ -18,35 +17,37 @@ export function LiveAssistant() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [appState, setAppState] = useState<AppState>({
         isCapturing: false,
-        isCalibrated: false,
+        isCalibrated: true,
         hcpMode: false,
         heartRate: 72,
         detectedFaces: [],
         gazePoint: null,
         activeRecognition: null,
     });
-    const [showCalibration, setShowCalibration] = useState(false);
     const [statusMessage, setStatusMessage] = useState('Ready to start');
+    const [recognizedFacePos, setRecognizedFacePos] = useState<FaceScreenPosition | null>(null);
     const loopRef = useRef<number | null>(null);
 
     // Recognition callback
     useEffect(() => {
-        const unsub = onRecognition((note: PersonhoodNote) => {
+        const unsub = onRecognition((note: PersonhoodNote, facePosition) => {
             setAppState((prev: AppState) => ({ ...prev, activeRecognition: note }));
+            setRecognizedFacePos(facePosition);
 
-            // Also send to overlay window if available
+            // Position the Electron overlay at the top-right of the face on the actual screen
             if (window.electronAPI) {
                 window.electronAPI.showOverlay({
                     visible: true,
                     note,
-                    x: 100,
-                    y: 100
+                    x: Math.round(facePosition.x + facePosition.width + 8),
+                    y: Math.max(0, Math.round(facePosition.y))
                 });
             }
 
             // Auto-hide after 15 seconds
             setTimeout(() => {
                 setAppState((prev: AppState) => ({ ...prev, activeRecognition: null }));
+                setRecognizedFacePos(null);
                 if (window.electronAPI) {
                     window.electronAPI.hideOverlay();
                 }
@@ -54,18 +55,6 @@ export function LiveAssistant() {
         });
 
         return () => { unsub(); };
-    }, []);
-
-    useEffect(() => {
-        const unsub = onCalibrationComplete(() => {
-            setShowCalibration(false);
-            setAppState((prev: AppState) => ({ ...prev, isCalibrated: true }));
-            setStatusMessage('Calibration complete — look at a face on your actual screen');
-        });
-
-        return () => {
-            unsub();
-        };
     }, []);
 
     const startLoop = useCallback(async () => {
@@ -92,22 +81,13 @@ export function LiveAssistant() {
                 return;
             }
 
-            setStatusMessage('Initializing eye tracking...');
-            const gazeTrackingMode = await initGazeTracking();
-            const requiresCalibration = gazeTrackingMode === 'webgazer';
-
             setAppState((prev: AppState) => ({
                 ...prev,
                 isCapturing: true,
-                isCalibrated: !requiresCalibration,
+                isCalibrated: true,
             }));
 
-            if (requiresCalibration) {
-                setShowCalibration(true);
-                setStatusMessage('Eye tracking ready — complete fullscreen calibration on your desktop');
-            } else {
-                setStatusMessage('Recognition loop active (mouse fallback)');
-            }
+            setStatusMessage('Recognition loop active — faces will be recognized automatically');
 
             // Main recognition loop (~10 fps)
             const runLoop = async () => {
@@ -117,11 +97,8 @@ export function LiveAssistant() {
                 // Detect faces
                 const faces = await detectFaces(video);
 
-                // Get gaze
-                const gaze = getLatestGaze();
-
-                // Process intersection
-                const dwell = processGazeFaceIntersection(gaze, faces);
+                // Process face presence (triggers recognition after threshold)
+                processFacePresence(faces);
 
                 // Update heart rate
                 const hr = simulateHeartRate();
@@ -129,12 +106,11 @@ export function LiveAssistant() {
                 setAppState((prev: AppState) => ({
                     ...prev,
                     detectedFaces: faces,
-                    gazePoint: gaze,
                     heartRate: hr,
                 }));
 
                 // Draw on canvas
-                drawVisualization(faces, gaze);
+                drawVisualization(faces);
 
                 loopRef.current = requestAnimationFrame(runLoop);
             };
@@ -152,38 +128,22 @@ export function LiveAssistant() {
             loopRef.current = null;
         }
         stopScreenCapture();
-        stopGazeTracking();
         resetRecognitionEngine();
         setAppState((prev: AppState) => ({
             ...prev,
             isCapturing: false,
-            isCalibrated: false,
             detectedFaces: [],
-            gazePoint: null,
             activeRecognition: null,
         }));
-        setShowCalibration(false);
+        setRecognizedFacePos(null);
         setStatusMessage('Stopped');
         if (window.electronAPI) {
             window.electronAPI.hideOverlay();
         }
     }, []);
 
-    const handleCalibrate = useCallback(async () => {
-        setShowCalibration(true);
-        setAppState((prev: AppState) => ({ ...prev, isCalibrated: false }));
-        setStatusMessage('Recalibrating eye tracking on the fullscreen overlay...');
 
-        try {
-            await beginGazeCalibration();
-        } catch (error) {
-            console.error('[MUNINN] Failed to start recalibration:', error);
-            setShowCalibration(false);
-            setStatusMessage('Unable to start calibration');
-        }
-    }, []);
-
-    function drawVisualization(faces: import('../../vision/faceDetection').FaceWithDescriptor[], gaze: GazePoint | null) {
+    function drawVisualization(faces: import('../../vision/faceDetection').FaceWithDescriptor[]) {
         const canvas = canvasRef.current;
         if (!canvas) return;
 
@@ -209,7 +169,7 @@ export function LiveAssistant() {
             ctx.strokeRect(face.x * (canvas.width / 1920), face.y * (canvas.height / 1080),
                 face.width * (canvas.width / 1920), face.height * (canvas.height / 1080));
 
-            // Dwell progress bar
+            // Recognition progress bar
             if (progress > 0) {
                 const barWidth = face.width * (canvas.width / 1920);
                 ctx.fillStyle = color;
@@ -221,27 +181,6 @@ export function LiveAssistant() {
                 );
             }
         });
-
-        // Draw gaze point
-        if (gaze) {
-            ctx.beginPath();
-            ctx.arc(
-                gaze.x * (canvas.width / screen.width),
-                gaze.y * (canvas.height / screen.height),
-                8, 0, Math.PI * 2
-            );
-            ctx.fillStyle = 'rgba(108, 92, 231, 0.6)';
-            ctx.fill();
-
-            ctx.beginPath();
-            ctx.arc(
-                gaze.x * (canvas.width / screen.width),
-                gaze.y * (canvas.height / screen.height),
-                3, 0, Math.PI * 2
-            );
-            ctx.fillStyle = '#fff';
-            ctx.fill();
-        }
     }
 
     function toggleHcpMode() {
@@ -256,7 +195,7 @@ export function LiveAssistant() {
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h1 className="text-3xl font-bold text-white tracking-tight flex items-center gap-3">
-                        <span className={appState.isCapturing ? 'animate-pulse' : ''}>👁️</span>
+                        <span className={appState.isCapturing ? 'animate-pulse' : ''}>👤</span>
                         Live Assistant
                     </h1>
                     <p className="mt-1 text-muninn-text-dim">{statusMessage}</p>
@@ -273,16 +212,6 @@ export function LiveAssistant() {
                             }`}
                     >
                         {appState.hcpMode ? '🏥 HCP Mode ON' : '🏥 HCP Mode'}
-                    </button>
-
-                    {/* Calibrate Button */}
-                    <button
-                        id="calibrate-btn"
-                        onClick={handleCalibrate}
-                        className="btn-secondary text-sm"
-                        disabled={!appState.isCapturing || showCalibration}
-                    >
-                        {showCalibration ? '🎯 Calibrating...' : '🎯 Calibrate'}
                     </button>
 
                     {/* Start/Stop */}
@@ -332,22 +261,48 @@ export function LiveAssistant() {
                                     </div>
                                 </div>
                             )}
+                            {/* PersonhoodCard anchored at top-right of recognized face */}
+                            {appState.activeRecognition && recognizedFacePos && (() => {
+                                const VIDEO_W = 1920;
+                                const VIDEO_H = 1080;
+                                // Face top-right in percentage of the canvas
+                                const rightPct = ((recognizedFacePos.x + recognizedFacePos.width) / VIDEO_W) * 100;
+                                const topPct = (recognizedFacePos.y / VIDEO_H) * 100;
+                                // If the face is in the right 60%, flip the card to the left side
+                                const faceRightEdgePct = rightPct;
+                                const flipToLeft = faceRightEdgePct > 60;
+
+                                return (
+                                    <div
+                                        className="absolute z-10 animate-slide-up"
+                                        style={{
+                                            top: `${Math.max(0, topPct)}%`,
+                                            ...(flipToLeft
+                                                ? { right: `${Math.max(0, 100 - ((recognizedFacePos.x / VIDEO_W) * 100))}%` }
+                                                : { left: `${Math.min(100, rightPct + 1)}%` }),
+                                            width: 280,
+                                            maxHeight: '90%',
+                                            overflow: 'auto'
+                                        }}
+                                    >
+                                        <PersonhoodCard
+                                            note={appState.activeRecognition}
+                                            onDismiss={() => {
+                                                setAppState((prev: AppState) => ({ ...prev, activeRecognition: null }));
+                                                setRecognizedFacePos(null);
+                                            }}
+                                        />
+                                    </div>
+                                );
+                            })()}
                         </div>
                     </div>
 
                     {/* Detection Stats */}
-                    <div className="grid grid-cols-3 gap-4 mt-4">
+                    <div className="grid grid-cols-2 gap-4 mt-4">
                         <div className="glass-card p-4">
                             <div className="text-xs text-muninn-text-muted">Detected Faces</div>
                             <div className="text-2xl font-bold text-white mt-1">{appState.detectedFaces.length}</div>
-                        </div>
-                        <div className="glass-card p-4">
-                            <div className="text-xs text-muninn-text-muted">Gaze Position</div>
-                            <div className="text-sm font-mono text-muninn-accent-light mt-1">
-                                {appState.gazePoint
-                                    ? `(${Math.round(appState.gazePoint.x)}, ${Math.round(appState.gazePoint.y)})`
-                                    : '—'}
-                            </div>
                         </div>
                         <div className="glass-card p-4">
                             <div className="text-xs text-muninn-text-muted">Recognition</div>
@@ -355,27 +310,16 @@ export function LiveAssistant() {
                                 {appState.activeRecognition ? (
                                     <span className="badge-success">Active</span>
                                 ) : (
-                                    <span className="text-muninn-text-muted">Waiting...</span>
+                                    <span className="text-muninn-text-muted">Scanning...</span>
                                 )}
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Right Panel */}
                 <div className="space-y-4">
                     {/* Biometric Panel */}
                     <BiometricPanel heartRate={appState.heartRate} isCapturing={appState.isCapturing} />
-
-                    {/* Active Recognition Card */}
-                    {appState.activeRecognition && (
-                        <div className="animate-slide-up">
-                            <PersonhoodCard
-                                note={appState.activeRecognition}
-                                onDismiss={() => setAppState((prev: AppState) => ({ ...prev, activeRecognition: null }))}
-                            />
-                        </div>
-                    )}
                 </div>
             </div>
         </div>

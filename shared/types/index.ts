@@ -69,6 +69,6 @@ export interface AppState {
     hcpMode: boolean;
     heartRate: number;
     detectedFaces: any[];
-    gazePoint: GazePoint | null;
+    gazePoint: null; // Retained for backwards compatibility, no longer actively used
     activeRecognition: PersonhoodNote | null;
 }

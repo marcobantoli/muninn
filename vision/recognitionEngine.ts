@@ -1,14 +1,21 @@
 // ─── MUNINN Recognition Engine ───
-// Maps gaze to faces and triggers recognition events after dwell threshold
+// Triggers recognition events when faces are detected and remain present
 
-import { FaceBoundingBox, GazePoint, RecognitionEvent, PersonhoodNote } from '../shared/types';
+import { FaceBoundingBox, RecognitionEvent, PersonhoodNote } from '../shared/types';
 
 import { getFaceMatcher, FaceWithDescriptor } from './faceDetection';
 import { PersonProfile } from '../shared/types';
 import * as faceapi from 'face-api.js';
 
-const DWELL_THRESHOLD_MS = 3000; // 3 seconds
+const PRESENCE_THRESHOLD_MS = 2000; // 2 seconds of face presence
 const API_BASE = 'http://localhost:3001/api';
+
+export interface FaceScreenPosition {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
 
 interface DwellTracker {
     faceId: string;
@@ -16,10 +23,14 @@ interface DwellTracker {
     startTime: number;
     lastSeen: number;
     triggered: boolean;
+    faceX: number;
+    faceY: number;
+    faceWidth: number;
+    faceHeight: number;
 }
 
 let dwellTrackers: Map<string, DwellTracker> = new Map();
-let recognitionCallbacks: Array<(note: PersonhoodNote) => void> = [];
+let recognitionCallbacks: Array<(note: PersonhoodNote, facePosition: FaceScreenPosition) => void> = [];
 
 // Instead of manual string mapping, we use FaceMatcher
 let faceMatcher: faceapi.FaceMatcher | null = null;
@@ -77,75 +88,68 @@ export function isHcpMode(): boolean {
     return hcpMode;
 }
 
-// Check gaze against detected faces
-export function processGazeFaceIntersection(
-    gaze: GazePoint | null,
+// Process all detected faces — trigger recognition when a face is present long enough
+export function processFacePresence(
     faces: import('./faceDetection').FaceWithDescriptor[]
 ): DwellTracker | null {
-    if (!gaze) return null;
-
     const now = Date.now();
     let activeDwell: DwellTracker | null = null;
+    const seenFaceIds = new Set<string>();
 
-    // Check which face (if any) the gaze intersects
     for (const f of faces) {
         const face: any = f;
-        const isInside = isPointInBox(gaze.x, gaze.y, face);
+        seenFaceIds.add(face.id);
 
-        if (isInside) {
-            let tracker = dwellTrackers.get(face.id);
+        let tracker = dwellTrackers.get(face.id);
 
-            if (!tracker) {
-                // Determine who the face is using FaceMatcher embedding comparison
-                const matchedProfileId = getLinkedProfileMatching(face.descriptor);
+        if (!tracker) {
+            // Determine who the face is using FaceMatcher embedding comparison
+            const matchedProfileId = getLinkedProfileMatching(face.descriptor);
 
-                tracker = {
-                    faceId: face.id,
-                    profileId: matchedProfileId,
-                    startTime: now,
-                    lastSeen: now,
-                    triggered: false
-                };
-                dwellTrackers.set(face.id, tracker);
-            } else {
-                tracker.lastSeen = now;
+            tracker = {
+                faceId: face.id,
+                profileId: matchedProfileId,
+                startTime: now,
+                lastSeen: now,
+                triggered: false,
+                faceX: face.x,
+                faceY: face.y,
+                faceWidth: face.width,
+                faceHeight: face.height
+            };
+            dwellTrackers.set(face.id, tracker);
+        } else {
+            tracker.lastSeen = now;
+            // Keep face position up to date
+            tracker.faceX = face.x;
+            tracker.faceY = face.y;
+            tracker.faceWidth = face.width;
+            tracker.faceHeight = face.height;
 
-                // Retroactively evaluate identity if a new full extraction gives a valid descriptor
-                if (!tracker.profileId) {
-                    tracker.profileId = getLinkedProfileMatching(face.descriptor);
-                }
+            // Retroactively evaluate identity if a new full extraction gives a valid descriptor
+            if (!tracker.profileId) {
+                tracker.profileId = getLinkedProfileMatching(face.descriptor);
             }
-
-            const dwellTime = now - tracker.startTime;
-
-            if (dwellTime >= DWELL_THRESHOLD_MS && !tracker.triggered && tracker.profileId) {
-                tracker.triggered = true;
-                triggerRecognitionEvent(tracker, dwellTime);
-            }
-
-            activeDwell = tracker;
         }
+
+        const presenceTime = now - tracker.startTime;
+
+        if (presenceTime >= PRESENCE_THRESHOLD_MS && !tracker.triggered && tracker.profileId) {
+            tracker.triggered = true;
+            triggerRecognitionEvent(tracker, presenceTime);
+        }
+
+        activeDwell = tracker;
     }
 
-    // Clean up stale trackers (gaze left the face)
+    // Clean up trackers for faces that are no longer detected
     for (const [faceId, tracker] of dwellTrackers) {
-        if (now - tracker.lastSeen > 500) {
+        if (!seenFaceIds.has(faceId) && now - tracker.lastSeen > 1000) {
             dwellTrackers.delete(faceId);
         }
     }
 
     return activeDwell;
-}
-
-function isPointInBox(x: number, y: number, box: FaceBoundingBox): boolean {
-    // Add some padding for better UX
-    const padding = 20;
-    return (
-        x >= box.x - padding &&
-        x <= box.x + box.width + padding &&
-        y >= box.y - padding &&
-        y <= box.y + box.height + padding
-    );
 }
 
 async function triggerRecognitionEvent(tracker: DwellTracker, dwellTime: number): Promise<void> {
@@ -162,7 +166,14 @@ async function triggerRecognitionEvent(tracker: DwellTracker, dwellTime: number)
         isStressed: heartRate > 100
     };
 
-    console.log('[MUNINN] Recognition event:', event);
+    const facePosition: FaceScreenPosition = {
+        x: tracker.faceX,
+        y: tracker.faceY,
+        width: tracker.faceWidth,
+        height: tracker.faceHeight
+    };
+
+    console.log('[MUNINN] Recognition event:', event, 'Face position:', facePosition);
 
     try {
         const response = await fetch(`${API_BASE}/recognition-event`, {
@@ -177,14 +188,14 @@ async function triggerRecognitionEvent(tracker: DwellTracker, dwellTime: number)
 
         if (response.ok) {
             const note: PersonhoodNote = await response.json();
-            recognitionCallbacks.forEach(fn => fn(note));
+            recognitionCallbacks.forEach(fn => fn(note, facePosition));
         }
     } catch (err) {
         console.error('[MUNINN] Recognition event error:', err);
     }
 }
 
-export function onRecognition(callback: (note: PersonhoodNote) => void): () => void {
+export function onRecognition(callback: (note: PersonhoodNote, facePosition: FaceScreenPosition) => void): () => void {
     recognitionCallbacks.push(callback);
     return () => {
         recognitionCallbacks = recognitionCallbacks.filter(fn => fn !== callback);
@@ -200,5 +211,5 @@ export function getDwellProgress(faceId: string): number {
     const tracker = dwellTrackers.get(faceId);
     if (!tracker) return 0;
     const elapsed = Date.now() - tracker.startTime;
-    return Math.min(1, elapsed / DWELL_THRESHOLD_MS);
+    return Math.min(1, elapsed / PRESENCE_THRESHOLD_MS);
 }
