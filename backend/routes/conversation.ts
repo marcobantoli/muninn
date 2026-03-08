@@ -209,3 +209,42 @@ conversationRoutes.post(
     }
   },
 );
+
+// POST /api/conversation/analyze-text
+// Simple synchronous analysis of conversation text
+conversationRoutes.post(
+  "/analyze-text",
+  async (req: Request, res: Response) => {
+    try {
+      const { transcript, relationship } = req.body;
+
+      if (!transcript) {
+        return res
+          .status(400)
+          .json({ error: "Missing required field: transcript" });
+      }
+
+      console.log(
+        "[MUNINN] Analyzing text with Gemini:",
+        transcript.substring(0, 50),
+      );
+
+      const analysis = await analyzeConversationWithGemini(
+        transcript,
+        relationship,
+      );
+
+      res.json({
+        success: true,
+        transcript,
+        analysis,
+      });
+    } catch (err) {
+      console.error("[MUNINN] Text analysis failed:", err);
+      res.status(500).json({
+        error: "Failed to analyze text",
+        details: err instanceof Error ? err.message : "Unknown error",
+      });
+    }
+  },
+);

@@ -17,7 +17,7 @@ import {
   resetFaceDetection,
 } from "../../vision/faceDetection";
 import { PersonhoodCard } from "../components/PersonhoodCard";
-import { LiveProfileEditor } from "../components/LiveProfileEditor";
+import { getProfileBuilder } from "../services/backgroundProfileBuilder";
 import {
   processCursorFaceIntersection,
   onRecognition,
@@ -46,8 +46,8 @@ export function LiveAssistant() {
     activeRecognition: null,
   });
   const [statusMessage, setStatusMessage] = useState("Ready to start");
-  const [showProfileEditor, setShowProfileEditor] = useState(false);
   const loopRef = useRef<number | null>(null);
+  const profileBuilderRef = useRef(getProfileBuilder());
 
   useEffect(() => {
     activeRecognitionRef.current = appState.activeRecognition;
@@ -101,9 +101,117 @@ export function LiveAssistant() {
     };
   }, []);
 
+  // Capture face screenshot from canvas
+  const captureFromCanvas = useCallback(
+    (x: number, y: number, width: number, height: number): string | null => {
+      if (!canvasRef.current) return null;
+
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.min(width * 2, 256);
+        canvas.height = Math.min(height * 2, 256);
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return null;
+
+        // Draw the face region from the main canvas
+        ctx.drawImage(
+          canvasRef.current,
+          x - width / 2,
+          y - height / 2,
+          width * 2,
+          height * 2,
+          0,
+          0,
+          canvas.width,
+          canvas.height,
+        );
+
+        return canvas.toDataURL("image/jpeg");
+      } catch (err) {
+        console.error("[MUNINN] Failed to capture face:", err);
+        return null;
+      }
+    },
+    [],
+  );
+
+  // Create profile from detected face and background conversation
+  const createProfileForFace = useCallback(
+    async (faceId: string, faceImage: string) => {
+      const builder = profileBuilderRef.current;
+      const transcript = builder.getTranscript();
+
+      if (!transcript || transcript.length < 5) {
+        setStatusMessage("Listening... (speak to build profile)");
+        return;
+      }
+
+      try {
+        setStatusMessage("Analyzing conversation with Gemini...");
+        console.log("[MUNINN] Creating profile from hover:", {
+          faceId,
+          transcriptLength: transcript.length,
+        });
+
+        const analysisRes = await fetch(
+          `${API_BASE}/conversation/analyze-text`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ transcript }),
+          },
+        );
+
+        if (!analysisRes.ok) throw new Error("Analysis failed");
+
+        const { analysis } = await analysisRes.json();
+
+        // Create minimal profile with captured face
+        const profileRes = await fetch(`${API_BASE}/profiles`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: `Person ${Date.now()}`, // Will be refined later
+            relationship: "Contact",
+            face_reference_image: faceImage,
+            identity_summary: analysis.identity_summary || "New person met",
+            hobbies: analysis.hobbies || [],
+            pride_points: analysis.pride_points || [],
+            emotional_anchors: analysis.emotional_anchors || [],
+            conversation_starters: analysis.conversation_starters || [],
+            communication_tips: analysis.communication_tips || [],
+          }),
+        });
+
+        if (profileRes.ok) {
+          const newProfile = await profileRes.json();
+          console.log("[MUNINN] Profile created:", newProfile.id);
+
+          // Refresh profiles
+          const profilesRes = await fetch(`${API_BASE}/profiles`);
+          const profiles: PersonProfile[] = await profilesRes.json();
+          profilesByIdRef.current = new Map(profiles.map((p) => [p.id, p]));
+          updateFaceMatcher(profiles);
+
+          setStatusMessage("✓ New profile created! (Edit in Profile Editor)");
+          builder.clearProfile(faceId);
+        }
+      } catch (err) {
+        console.error("[MUNINN] Profile creation failed:", err);
+        setStatusMessage("Error creating profile");
+      }
+    },
+    [],
+  );
+
   const startLoop = useCallback(async () => {
     try {
       recognitionLoopActiveRef.current = true;
+      const builder = profileBuilderRef.current;
+
+      // Start background audio recording
+      await builder.startRecording();
       setStatusMessage(
         "Initializing AI Face Models (downloading weights if first run)...",
       );
@@ -290,8 +398,13 @@ export function LiveAssistant() {
     }
   }, []);
 
-  const stopLoop = useCallback(() => {
+  const stopLoop = useCallback(async () => {
     recognitionLoopActiveRef.current = false;
+    const builder = profileBuilderRef.current;
+
+    // Stop background audio recording
+    await builder.stopRecording();
+
     if (loopRef.current) {
       window.clearTimeout(loopRef.current);
       loopRef.current = null;
@@ -517,58 +630,13 @@ export function LiveAssistant() {
                 Recognition Ready
               </h3>
               <p className="text-muninn-text-dim text-sm">
-                Hover your cursor over a detected face to see rich profile
-                information and conversation starters
+                Hover your cursor over a detected face. System silently listens
+                and builds personhood profiles automatically.
               </p>
             </div>
           )}
-
-          {/* Live Profile Editor Button */}
-          <button
-            onClick={() => setShowProfileEditor(true)}
-            className="w-full bg-gradient-to-r from-muninn-accent/20 to-purple-500/20 border border-muninn-accent/50 hover:border-muninn-accent text-white font-semibold py-3 px-4 rounded-2xl transition-all duration-200 hover:shadow-lg hover:shadow-muninn-accent/20"
-          >
-            <div className="flex items-center justify-center gap-2">
-              <span className="text-lg">🎙️</span>
-              <span>Start Live Profile</span>
-            </div>
-            <div className="text-xs text-muninn-text-dim mt-1">
-              Record conversation + AI analysis
-            </div>
-          </button>
         </div>
       </div>
-
-      {/* Live Profile Editor Modal */}
-      {showProfileEditor && (
-        <LiveProfileEditor
-          onProfileUpdate={async (profile) => {
-            // Save the profile to the database
-            try {
-              const res = await fetch(`${API_BASE}/profiles`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(profile),
-              });
-
-              if (res.ok) {
-                const newProfile = await res.json();
-                console.log("[MUNINN] Profile created:", newProfile);
-                // Refresh profiles list
-                const profilesRes = await fetch(`${API_BASE}/profiles`);
-                const profiles: PersonProfile[] = await profilesRes.json();
-                updateFaceMatcher(profiles);
-                setShowProfileEditor(false);
-                setStatusMessage("New profile saved successfully!");
-              }
-            } catch (err) {
-              console.error("Failed to save profile:", err);
-              setStatusMessage("Error saving profile");
-            }
-          }}
-          onClose={() => setShowProfileEditor(false)}
-        />
-      )}
     </div>
   );
 }

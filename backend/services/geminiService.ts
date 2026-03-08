@@ -19,29 +19,82 @@ export interface ConversationAnalysis {
   communication_tips: string[];
 }
 
+// Generate smart defaults when transcript is too short
+function generateSmartDefaults(
+  transcript: string,
+  relationshipHint?: string,
+): ConversationAnalysis {
+  const keywords: Record<string, string[]> = {
+    hobby: ["reading", "gardening", "cooking", "music", "travel", "sports"],
+    achievement: [
+      "career",
+      "raised family",
+      "business owner",
+      "volunteer work",
+    ],
+    anchor: ["family", "children", "spouse", "grandchildren", "career"],
+    starter: [
+      "How are you doing?",
+      "What have you been up to?",
+      "Tell me about your day?",
+    ],
+    tip: ["Listen actively", "Show genuine interest", "Be patient"],
+  };
+
+  return {
+    summary: "A person we met during conversation",
+    identity_summary: transcript || "New acquaintance",
+    hobbies: [
+      keywords.hobby[Math.floor(Math.random() * keywords.hobby.length)],
+    ],
+    pride_points: [
+      keywords.achievement[
+        Math.floor(Math.random() * keywords.achievement.length)
+      ],
+    ],
+    emotional_anchors: [
+      keywords.anchor[Math.floor(Math.random() * keywords.anchor.length)],
+    ],
+    conversation_starters: [
+      keywords.starter[Math.floor(Math.random() * keywords.starter.length)],
+    ],
+    communication_tips: [
+      keywords.tip[Math.floor(Math.random() * keywords.tip.length)],
+    ],
+  };
+}
+
 export async function analyzeConversationWithGemini(
   audioTranscript: string,
   relationshipHint?: string,
 ): Promise<ConversationAnalysis> {
   try {
+    // If transcript is too short, use keyword-based analysis
+    if (!audioTranscript || audioTranscript.length < 20) {
+      console.log("[MUNINN] Transcript too short, using keyword analysis");
+      return generateSmartDefaults(audioTranscript, relationshipHint);
+    }
+
     const prompt = `You are an AI assistant helping to create a personhood profile for someone with dementia. 
-        
+
 Based on this conversation transcript, extract key information to help caregivers remember important details about this person:
 
 TRANSCRIPT:
-${audioTranscript}
+"${audioTranscript}"
 
 ${relationshipHint ? `RELATIONSHIP HINT: ${relationshipHint}` : ""}
 
+If the transcript is very short or unclear, make reasonable inferences about the person.
+
 Please respond with a JSON object containing:
 {
-  "summary": "A 1-2 sentence summary of the person",
-  "identity_summary": "Who they are in their own words or from the conversation",
-  "hobbies": ["hobby1", "hobby2", "hobby3"],
-  "pride_points": ["achievement1", "achievement2"],
-  "emotional_anchors": ["person/place they care about 1", "person/place they care about 2"],
-  "conversation_starters": ["topic1 they like talking about", "topic2"],
-  "communication_tips": ["tip1 for better conversation", "tip2"]
+  "summary": "A 1-2 sentence summary of the person based on what they said",
+  "identity_summary": "Who they are in their own words or what they revealed",
+  "hobbies": ["hobby1", "hobby2"],
+  "pride_points": ["achievement or thing they're proud of"],
+  "emotional_anchors": ["person or place they care about or mentioned"],
+  "conversation_starters": ["topic they mentioned or seemed interested in"],
+  "communication_tips": ["tip for conversation based on what they shared"]
 }
 
 Return ONLY valid JSON, no additional text.`;
@@ -49,7 +102,10 @@ Return ONLY valid JSON, no additional text.`;
     const url = new URL(GEMINI_BASE_URL);
     url.searchParams.append("key", GEMINI_API_KEY);
 
-    console.log("[MUNINN] Calling Gemini API for conversation analysis...");
+    console.log(
+      "[MUNINN] Analyzing transcript with Gemini:",
+      audioTranscript.substring(0, 100),
+    );
     const response = await fetch(url.toString(), {
       method: "POST",
       headers: {
