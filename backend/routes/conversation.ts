@@ -211,22 +211,16 @@ conversationRoutes.post(
 );
 
 // POST /api/conversation/analyze-text
-// Simple synchronous analysis of conversation text
+// Simple synchronous analysis of conversation text (can be empty for defaults)
 conversationRoutes.post(
   "/analyze-text",
   async (req: Request, res: Response) => {
     try {
-      const { transcript, relationship } = req.body;
-
-      if (!transcript) {
-        return res
-          .status(400)
-          .json({ error: "Missing required field: transcript" });
-      }
+      const { transcript = "", relationship } = req.body;
 
       console.log(
-        "[MUNINN] Analyzing text with Gemini:",
-        transcript.substring(0, 50),
+        "[MUNINN] Analyzing text with Gemini, length:",
+        transcript.length,
       );
 
       const analysis = await analyzeConversationWithGemini(
