@@ -22,7 +22,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
                     </div>
                     <div>
                         <h1 className="text-lg font-bold text-white tracking-tight">MUNINN</h1>
-                        <p className="text-xs text-muninn-text-muted">Cognitive Gaze Assistant</p>
+                                                <p className="text-xs text-muninn-text-muted">Cognitive Context Assistant</p>
                     </div>
                 </div>
             </div>

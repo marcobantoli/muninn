@@ -1,7 +1,7 @@
 // ─── MUNINN Recognition Engine ───
 // Triggers recognition events when the cursor hovers over a detected face
 
-import { FaceBoundingBox, GazePoint, RecognitionEvent, PersonhoodNote } from '../shared/types';
+import { CursorPoint, FaceBoundingBox, RecognitionEvent, PersonhoodNote } from '../shared/types';
 
 import { getFaceMatcher, FaceWithDescriptor } from './faceDetection';
 import { PersonProfile } from '../shared/types';
@@ -75,7 +75,7 @@ export function isHcpMode(): boolean {
 }
 
 export function processCursorFaceIntersection(
-    cursor: GazePoint | null,
+    cursor: CursorPoint | null,
     faces: import('./faceDetection').FaceWithDescriptor[],
     captureSize?: { width: number; height: number }
 ): DwellTracker | null {
@@ -140,7 +140,7 @@ export function processCursorFaceIntersection(
 }
 
 function normalizePointToCaptureSpace(
-    point: GazePoint,
+    point: CursorPoint,
     captureSize?: { width: number; height: number }
 ): { x: number; y: number } {
     if (!captureSize || captureSize.width <= 0 || captureSize.height <= 0) {

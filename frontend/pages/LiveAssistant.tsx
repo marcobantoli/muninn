@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { GazePoint, PersonhoodNote, AppState } from '../../shared/types';
+import { CursorPoint, PersonhoodNote, AppState } from '../../shared/types';
 import { startScreenCapture, stopScreenCapture, getVideoElement } from '../../vision/screenCapture';
 import { detectFaces, initFaceDetection } from '../../vision/faceDetection';
 import {
@@ -21,7 +21,6 @@ export function LiveAssistant() {
         isCalibrated: true,
         hcpMode: false,
         detectedFaces: [],
-        gazePoint: null,
         activeRecognition: null,
     });
     const [statusMessage, setStatusMessage] = useState('Ready to start');
@@ -127,7 +126,7 @@ export function LiveAssistant() {
                         return;
                     }
 
-                    let cursorPoint: GazePoint | null = null;
+                    let cursorPoint: CursorPoint | null = null;
                     try {
                         const cursor = await window.electronAPI.getCursorScreenPoint();
                         cursorPoint = {

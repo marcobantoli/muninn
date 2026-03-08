@@ -1,30 +1,17 @@
 // ─── MUNINN Screen Capture Module ───
 // Uses Electron's desktopCapturer API to capture screen frames
 
-import { GazePoint, GazeTrackingMode, OverlayTrackingCommand } from '../shared/types';
-
 declare global {
     interface Window {
         electronAPI: {
             getSources: () => Promise<Array<{ id: string; name: string; thumbnailDataUrl: string }>>;
             getScreenSize: () => Promise<{ width: number; height: number }>;
             getCursorScreenPoint: () => Promise<{ x: number; y: number }>;
-            startOverlayEyeTracking: () => Promise<GazeTrackingMode>;
-            stopOverlayEyeTracking: () => Promise<boolean>;
-            startOverlayCalibration: () => void;
             showOverlay: (data: any) => void;
             hideOverlay: () => void;
             updateOverlay: (data: any) => void;
             setOverlayNoteInteractive: (interactive: boolean) => void;
             onOverlayData: (callback: (data: any) => void) => void;
-            onOverlayTrackingCommand: (callback: (command: OverlayTrackingCommand) => void) => void;
-            onGazeData: (callback: (gaze: GazePoint) => void) => void;
-            onGazeCalibrationComplete: (callback: () => void) => void;
-            onGazeTrackingError: (callback: (message: string) => void) => void;
-            emitGazeData: (gaze: GazePoint) => void;
-            emitOverlayTrackingReady: (data: { mode: GazeTrackingMode }) => void;
-            emitOverlayTrackingError: (message: string) => void;
-            emitGazeCalibrationComplete: () => void;
         };
     }
 }

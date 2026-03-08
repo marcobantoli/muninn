@@ -1,4 +1,4 @@
-# MUNINN — The Cognitive Gaze Assistant
+# MUNINN — The Cognitive Context Assistant
 
 **AI-Augmented Personhood Retrieval for Dementia Support**
 
@@ -8,8 +8,8 @@ MUNINN is an Electron desktop prototype that detects when a user is looking at s
 
 1. **Screen Capture** — Continuously captures the user's display
 2. **Face Detection** — Identifies faces on screen using skin-tone analysis
-3. **Gaze Tracking** — Estimates where the user is looking via webcam (WebGazer.js)
-4. **Dwell Detection** — If gaze rests on a face for >3 seconds, a recognition gap is assumed
+3. **Cursor Tracking** — Monitors pointer position across the captured screen
+4. **Dwell Detection** — If the cursor rests on a face for >3 seconds, a recognition gap is assumed
 5. **Profile Retrieval** — Looks up the linked person profile
 6. **AI Note Generation** — Generates a 5-point contextual personhood reminder
 7. **Overlay Display** — Shows an unobtrusive overlay with name, relationship, and conversation starters
@@ -20,7 +20,7 @@ MUNINN is an Electron desktop prototype that detects when a user is looking at s
 - **Frontend**: React + TypeScript + TailwindCSS
 - **Backend**: Express (inside Electron, port 3001)
 - **Database**: Firebase Firestore for profile persistence
-- **Vision**: Skin-tone face detection, WebGazer.js gaze tracking
+- **Vision**: Face detection plus cursor-based recognition targeting
 - **AI**: Template-based personhood note generator (LLM-ready)
 
 ## Quick Start
@@ -50,7 +50,7 @@ On first backend startup, MUNINN seeds the Firestore `profiles` collection autom
 
 - **HCP Mode** — Toggle healthcare professional guidance in overlays
 - **Biometric Signal** — Simulated heart rate (60–120 BPM); elevated HR prioritizes emotional anchors
-- **Gaze Calibration** — 9-point calibration screen for WebGazer.js
+- **Cursor Recognition** — Hover-based recognition targeting over detected faces
 - **Seed Profiles** — 4 pre-loaded profiles (Sarah, James, Margaret, Dr. Patel)
 
 ## Project Structure
@@ -71,7 +71,6 @@ muninn/
 │   └── seed.ts        # Sample person profiles
 ├── vision/            # Computer vision pipeline
 │   ├── faceDetection.ts
-│   ├── gazeTracking.ts
 │   ├── recognitionEngine.ts
 │   └── screenCapture.ts
 └── shared/types/      # TypeScript interfaces

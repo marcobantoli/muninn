@@ -25,16 +25,10 @@ export interface FaceBoundingBox {
     linkedProfileId?: string;
 }
 
-export interface GazePoint {
+export interface CursorPoint {
     x: number;
     y: number;
     timestamp: number;
-}
-
-export type GazeTrackingMode = 'webgazer' | 'mouse';
-
-export interface OverlayTrackingCommand {
-    type: 'start-eye-tracking' | 'stop-eye-tracking' | 'start-calibration';
 }
 
 export interface RecognitionEvent {
@@ -70,6 +64,5 @@ export interface AppState {
     isCalibrated: boolean;
     hcpMode: boolean;
     detectedFaces: any[];
-    gazePoint: null; // Retained for backwards compatibility, no longer actively used
     activeRecognition: PersonhoodNote | null;
 }
