@@ -81,7 +81,7 @@ export function Dashboard({ onEditProfile }: DashboardProps) {
                 </div>
             ) : profiles.length === 0 ? (
                 <div className="glass-card p-12 text-center">
-                    <div className="text-4xl mb-4">👤</div>
+                    <div className="text-4xl mb-4 font-semibold text-white/70">P</div>
                     <p className="text-muninn-text-dim">No profiles yet. Create one to get started.</p>
                 </div>
             ) : (

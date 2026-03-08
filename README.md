@@ -19,7 +19,7 @@ MUNINN is an Electron desktop prototype that detects when a user is looking at s
 - **Desktop Shell**: Electron
 - **Frontend**: React + TypeScript + TailwindCSS
 - **Backend**: Express (inside Electron, port 3001)
-- **Database**: In-memory store with seed data (Firebase-ready)
+- **Database**: Firebase Firestore for profile persistence
 - **Vision**: Skin-tone face detection, WebGazer.js gaze tracking
 - **AI**: Template-based personhood note generator (LLM-ready)
 
@@ -34,6 +34,8 @@ npm run dev
 ```
 
 The app will launch an Electron window with the MUNINN interface.
+
+On first backend startup, MUNINN seeds the Firestore `profiles` collection automatically. If a local `profiles.json` file already exists, it is used as the one-time migration source before falling back to the built-in seed profiles.
 
 ## UI Pages
 

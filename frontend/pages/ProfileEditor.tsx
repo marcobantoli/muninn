@@ -174,7 +174,7 @@ export function ProfileEditor({ profileId, onBack }: ProfileEditorProps) {
                 {/* Basic Info */}
                 <div className="glass-card p-6">
                     <h2 className="section-title mb-4 flex items-center gap-2">
-                        <span>👤</span> Basic Information
+                        <span>Basic Information</span>
                     </h2>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -213,7 +213,7 @@ export function ProfileEditor({ profileId, onBack }: ProfileEditorProps) {
                 {/* Face Reference */}
                 <div className="glass-card p-6">
                     <h2 className="section-title mb-4 flex items-center gap-2">
-                        <span>📷</span> Face Reference
+                        <span>Face Reference</span>
                     </h2>
                     <p className="text-sm text-muninn-text-muted mb-4">
                         Capture a photo of the person to link their face to this profile. The system will extract a numerical signature (embedding) from their face for the recognition loop.
@@ -221,7 +221,7 @@ export function ProfileEditor({ profileId, onBack }: ProfileEditorProps) {
 
                     {form.faceDescriptor && !capturingFace && (
                         <div className="mb-4 p-3 bg-muninn-success/10 border border-muninn-success/30 rounded-xl text-muninn-success text-sm flex items-center gap-2">
-                            <span>✅</span> Face descriptor is saved and ready for recognition.
+                            <span>Face descriptor is saved and ready for recognition.</span>
                         </div>
                     )}
 
@@ -238,7 +238,7 @@ export function ProfileEditor({ profileId, onBack }: ProfileEditorProps) {
                             </div>
                             <div className="flex justify-center gap-3 mt-4">
                                 <button onClick={captureFace} className="btn-primary">
-                                    📸 Capture Embedded Features
+                                    Capture Embedded Features
                                 </button>
                                 <button onClick={stopWebcam} className="btn-secondary">
                                     Cancel
@@ -248,7 +248,7 @@ export function ProfileEditor({ profileId, onBack }: ProfileEditorProps) {
                     ) : (
                         <div className="flex flex-col gap-4 max-w-sm">
                             <button onClick={startWebcam} className="btn-secondary w-full text-center">
-                                {form.faceDescriptor ? 'Recapture Face via Webcam' : '📸 Add Face via Webcam'}
+                                {form.faceDescriptor ? 'Recapture Face via Webcam' : 'Add Face via Webcam'}
                             </button>
 
                             <div className="relative">
@@ -268,7 +268,7 @@ export function ProfileEditor({ profileId, onBack }: ProfileEditorProps) {
                                 onChange={handleFileUpload}
                             />
                             <button onClick={() => fileInputRef.current?.click()} className="btn-secondary w-full text-center">
-                                📁 Upload Photo
+                                Upload Photo
                             </button>
                         </div>
                     )}
@@ -277,7 +277,7 @@ export function ProfileEditor({ profileId, onBack }: ProfileEditorProps) {
                 {/* Personhood Details */}
                 <div className="glass-card p-6">
                     <h2 className="section-title mb-4 flex items-center gap-2">
-                        <span>✨</span> Personhood Details
+                        <span>Personhood Details</span>
                     </h2>
                     <div className="space-y-4">
                         <div>
@@ -322,7 +322,7 @@ export function ProfileEditor({ profileId, onBack }: ProfileEditorProps) {
                 {/* Communication */}
                 <div className="glass-card p-6">
                     <h2 className="section-title mb-4 flex items-center gap-2">
-                        <span>💬</span> Communication
+                        <span>Communication</span>
                     </h2>
                     <div className="space-y-4">
                         <div>

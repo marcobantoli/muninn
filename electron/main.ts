@@ -8,6 +8,7 @@ let mainWindow: BrowserWindow | null = null;
 let overlayWindow: BrowserWindow | null = null;
 let overlayTrackingActive = false;
 let overlayHasVisibleNote = false;
+let overlayNoteInteractive = false;
 let pendingTrackingStartResolve: ((mode: GazeTrackingMode) => void) | null = null;
 let pendingTrackingStartReject: ((error: Error) => void) | null = null;
 let pendingTrackingStartTimeout: NodeJS.Timeout | null = null;
@@ -66,6 +67,32 @@ function syncOverlayVisibility(): void {
     }
 }
 
+function setOverlayNoteInteractive(interactive: boolean): void {
+    if (!overlayWindow || overlayWindow.isDestroyed()) {
+        return;
+    }
+
+    if (!overlayHasVisibleNote || overlayTrackingActive) {
+        overlayNoteInteractive = false;
+        return;
+    }
+
+    try {
+        overlayNoteInteractive = interactive;
+
+        if (interactive) {
+            overlayWindow.setIgnoreMouseEvents(false);
+            overlayWindow.show();
+            return;
+        }
+
+        overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+        overlayWindow.showInactive();
+    } catch (error) {
+        console.warn('[MUNINN] Failed to toggle overlay note interactivity:', error);
+    }
+}
+
 function createMainWindow() {
     mainWindow = new BrowserWindow({
         width: 1400,
@@ -76,6 +103,7 @@ function createMainWindow() {
         backgroundColor: '#0a0e1a',
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
+            backgroundThrottling: false,
             contextIsolation: true,
             nodeIntegration: false
         }
@@ -193,6 +221,8 @@ ipcMain.on('start-overlay-calibration', async () => {
 ipcMain.on('show-overlay', (_event, data) => {
     if (overlayWindow && !overlayWindow.isDestroyed()) {
         overlayHasVisibleNote = Boolean(data?.visible && data?.note);
+        overlayNoteInteractive = false;
+        overlayWindow.setIgnoreMouseEvents(true, { forward: true });
         overlayWindow.webContents.send('overlay-data', data);
         syncOverlayVisibility();
     }
@@ -201,6 +231,8 @@ ipcMain.on('show-overlay', (_event, data) => {
 ipcMain.on('hide-overlay', () => {
     if (overlayWindow && !overlayWindow.isDestroyed()) {
         overlayHasVisibleNote = false;
+        overlayNoteInteractive = false;
+        overlayWindow.setIgnoreMouseEvents(true, { forward: true });
         overlayWindow.webContents.send('overlay-data', {
             visible: false,
             note: null,
@@ -214,9 +246,17 @@ ipcMain.on('hide-overlay', () => {
 ipcMain.on('update-overlay', (_event, data) => {
     if (overlayWindow && !overlayWindow.isDestroyed()) {
         overlayHasVisibleNote = Boolean(data?.visible && data?.note);
+        if (!overlayHasVisibleNote && overlayNoteInteractive) {
+            overlayNoteInteractive = false;
+            overlayWindow.setIgnoreMouseEvents(true, { forward: true });
+        }
         overlayWindow.webContents.send('overlay-data', data);
         syncOverlayVisibility();
     }
+});
+
+ipcMain.on('set-overlay-note-interactive', (_event, interactive: boolean) => {
+    setOverlayNoteInteractive(Boolean(interactive));
 });
 
 ipcMain.on('overlay-gaze-data', (_event, gaze: GazePoint) => {

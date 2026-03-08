@@ -41,9 +41,7 @@ export interface RecognitionEvent {
     faceId: string;
     profileId: string;
     dwellTime: number;
-    heartRate: number;
     timestamp: number;
-    isStressed: boolean;
 }
 
 export interface PersonhoodNote {
@@ -51,7 +49,11 @@ export interface PersonhoodNote {
     name: string;
     relationship: string;
     points: string[];
-    isStressed: boolean;
+    summary?: string;
+    opener?: string;
+    memorySpark?: string;
+    careTip?: string;
+    highlights?: string[];
     hcpGuidance?: string[];
     generatedAt: string;
 }
@@ -67,7 +69,6 @@ export interface AppState {
     isCapturing: boolean;
     isCalibrated: boolean;
     hcpMode: boolean;
-    heartRate: number;
     detectedFaces: any[];
     gazePoint: null; // Retained for backwards compatibility, no longer actively used
     activeRecognition: PersonhoodNote | null;

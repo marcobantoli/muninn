@@ -4,7 +4,6 @@ export function HcpBanner() {
     return (
         <div className="mb-6 glass-card p-4 border-l-4 border-muninn-success animate-fade-in">
             <div className="flex items-start gap-3">
-                <span className="text-xl">🏥</span>
                 <div>
                     <h3 className="text-sm font-semibold text-muninn-success">Healthcare Professional Mode Active</h3>
                     <p className="text-xs text-muninn-text-dim mt-1">

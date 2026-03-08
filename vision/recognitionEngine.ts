@@ -1,13 +1,13 @@
 // ─── MUNINN Recognition Engine ───
-// Triggers recognition events when faces are detected and remain present
+// Triggers recognition events when the cursor hovers over a detected face
 
-import { FaceBoundingBox, RecognitionEvent, PersonhoodNote } from '../shared/types';
+import { FaceBoundingBox, GazePoint, RecognitionEvent, PersonhoodNote } from '../shared/types';
 
 import { getFaceMatcher, FaceWithDescriptor } from './faceDetection';
 import { PersonProfile } from '../shared/types';
 import * as faceapi from 'face-api.js';
 
-const PRESENCE_THRESHOLD_MS = 2000; // 2 seconds of face presence
+const HOVER_THRESHOLD_MS = 1000; // 1 second of hover
 const API_BASE = 'http://localhost:3001/api';
 
 export interface FaceScreenPosition {
@@ -31,21 +31,11 @@ interface DwellTracker {
 
 let dwellTrackers: Map<string, DwellTracker> = new Map();
 let recognitionCallbacks: Array<(note: PersonhoodNote, facePosition: FaceScreenPosition) => void> = [];
+let activeHoveredFaceId: string | null = null;
 
 // Instead of manual string mapping, we use FaceMatcher
 let faceMatcher: faceapi.FaceMatcher | null = null;
-let lastHeartRate = 72;
 let hcpMode = false;
-
-// Simulated heart rate that varies over time
-export function simulateHeartRate(): number {
-    // Simulate between 60-120 BPM with some noise
-    const base = 72;
-    const variation = Math.sin(Date.now() / 10000) * 20;
-    const noise = (Math.random() - 0.5) * 15;
-    lastHeartRate = Math.round(Math.max(60, Math.min(120, base + variation + noise)));
-    return lastHeartRate;
-}
 
 // Build the FaceMatcher from available profiles
 export function updateFaceMatcher(profiles: PersonProfile[]): void {
@@ -76,10 +66,6 @@ export function getLinkedProfileMatching(descriptor?: Float32Array): string | un
     return match.label !== 'unknown' ? match.label : undefined;
 }
 
-export function getHeartRate(): number {
-    return lastHeartRate;
-}
-
 export function setHcpMode(enabled: boolean): void {
     hcpMode = enabled;
 }
@@ -88,82 +74,138 @@ export function isHcpMode(): boolean {
     return hcpMode;
 }
 
-// Process all detected faces — trigger recognition when a face is present long enough
-export function processFacePresence(
-    faces: import('./faceDetection').FaceWithDescriptor[]
+export function processCursorFaceIntersection(
+    cursor: GazePoint | null,
+    faces: import('./faceDetection').FaceWithDescriptor[],
+    captureSize?: { width: number; height: number }
 ): DwellTracker | null {
+    if (!cursor) {
+        activeHoveredFaceId = null;
+        cleanupStaleTrackers(Date.now());
+        return null;
+    }
+
     const now = Date.now();
     let activeDwell: DwellTracker | null = null;
-    const seenFaceIds = new Set<string>();
+    const normalizedCursor = normalizePointToCaptureSpace(cursor, captureSize);
+    const hoveredFace = findHoveredFace(normalizedCursor.x, normalizedCursor.y, faces);
 
-    for (const f of faces) {
-        const face: any = f;
-        seenFaceIds.add(face.id);
+    activeHoveredFaceId = hoveredFace?.id ?? null;
 
-        let tracker = dwellTrackers.get(face.id);
+    if (hoveredFace) {
+        const trackerKey = getTrackerKey(hoveredFace);
+        let tracker = dwellTrackers.get(trackerKey);
 
         if (!tracker) {
-            // Determine who the face is using FaceMatcher embedding comparison
-            const matchedProfileId = getLinkedProfileMatching(face.descriptor);
+            const matchedProfileId = getLinkedProfileMatching(hoveredFace.descriptor);
 
             tracker = {
-                faceId: face.id,
+                faceId: hoveredFace.id,
                 profileId: matchedProfileId,
                 startTime: now,
                 lastSeen: now,
                 triggered: false,
-                faceX: face.x,
-                faceY: face.y,
-                faceWidth: face.width,
-                faceHeight: face.height
+                faceX: hoveredFace.x,
+                faceY: hoveredFace.y,
+                faceWidth: hoveredFace.width,
+                faceHeight: hoveredFace.height
             };
-            dwellTrackers.set(face.id, tracker);
+            dwellTrackers.set(trackerKey, tracker);
         } else {
+            tracker.faceId = hoveredFace.id;
             tracker.lastSeen = now;
-            // Keep face position up to date
-            tracker.faceX = face.x;
-            tracker.faceY = face.y;
-            tracker.faceWidth = face.width;
-            tracker.faceHeight = face.height;
+            tracker.faceX = hoveredFace.x;
+            tracker.faceY = hoveredFace.y;
+            tracker.faceWidth = hoveredFace.width;
+            tracker.faceHeight = hoveredFace.height;
 
-            // Retroactively evaluate identity if a new full extraction gives a valid descriptor
             if (!tracker.profileId) {
-                tracker.profileId = getLinkedProfileMatching(face.descriptor);
+                tracker.profileId = getLinkedProfileMatching(hoveredFace.descriptor);
             }
         }
 
-        const presenceTime = now - tracker.startTime;
+        const hoverTime = now - tracker.startTime;
 
-        if (presenceTime >= PRESENCE_THRESHOLD_MS && !tracker.triggered && tracker.profileId) {
+        if (hoverTime >= HOVER_THRESHOLD_MS && !tracker.triggered && tracker.profileId) {
             tracker.triggered = true;
-            triggerRecognitionEvent(tracker, presenceTime);
+            triggerRecognitionEvent(tracker, hoverTime);
         }
 
         activeDwell = tracker;
     }
 
-    // Clean up trackers for faces that are no longer detected
-    for (const [faceId, tracker] of dwellTrackers) {
-        if (!seenFaceIds.has(faceId) && now - tracker.lastSeen > 1000) {
-            dwellTrackers.delete(faceId);
-        }
-    }
+    cleanupStaleTrackers(now);
 
     return activeDwell;
+}
+
+function normalizePointToCaptureSpace(
+    point: GazePoint,
+    captureSize?: { width: number; height: number }
+): { x: number; y: number } {
+    if (!captureSize || captureSize.width <= 0 || captureSize.height <= 0) {
+        return { x: point.x, y: point.y };
+    }
+
+    return {
+        x: (point.x / screen.width) * captureSize.width,
+        y: (point.y / screen.height) * captureSize.height,
+    };
+}
+
+function findHoveredFace(
+    x: number,
+    y: number,
+    faces: import('./faceDetection').FaceWithDescriptor[]
+): import('./faceDetection').FaceWithDescriptor | null {
+    const hoveredFaces = faces.filter((face) => isPointInBox(x, y, face));
+    if (hoveredFaces.length === 0) {
+        return null;
+    }
+
+    if (hoveredFaces.length === 1) {
+        return hoveredFaces[0];
+    }
+
+    return hoveredFaces.reduce((best, current) =>
+        distanceToFaceCenter(x, y, current) < distanceToFaceCenter(x, y, best) ? current : best
+    );
+}
+
+function getTrackerKey(face: import('./faceDetection').FaceWithDescriptor): string {
+    const matchedProfileId = getLinkedProfileMatching(face.descriptor);
+    return matchedProfileId ? `profile:${matchedProfileId}` : `face:${face.id}`;
+}
+
+function isPointInBox(x: number, y: number, box: FaceBoundingBox, padding = 20): boolean {
+    return (
+        x >= box.x - padding &&
+        x <= box.x + box.width + padding &&
+        y >= box.y - padding &&
+        y <= box.y + box.height + padding
+    );
+}
+
+function distanceToFaceCenter(x: number, y: number, box: FaceBoundingBox): number {
+    return Math.hypot(x - (box.x + box.width / 2), y - (box.y + box.height / 2));
+}
+
+function cleanupStaleTrackers(now: number): void {
+    for (const [key, tracker] of dwellTrackers) {
+        if (now - tracker.lastSeen > 300) {
+            dwellTrackers.delete(key);
+        }
+    }
 }
 
 async function triggerRecognitionEvent(tracker: DwellTracker, dwellTime: number): Promise<void> {
     if (!tracker.profileId) return;
 
-    const heartRate = simulateHeartRate();
-
     const event: RecognitionEvent = {
         faceId: tracker.faceId,
         profileId: tracker.profileId,
         dwellTime,
-        heartRate,
         timestamp: Date.now(),
-        isStressed: heartRate > 100
     };
 
     const facePosition: FaceScreenPosition = {
@@ -181,7 +223,6 @@ async function triggerRecognitionEvent(tracker: DwellTracker, dwellTime: number)
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 profileId: event.profileId,
-                heartRate: event.heartRate,
                 hcpMode
             })
         });
@@ -204,12 +245,16 @@ export function onRecognition(callback: (note: PersonhoodNote, facePosition: Fac
 
 export function resetRecognitionEngine(): void {
     dwellTrackers.clear();
-    recognitionCallbacks = [];
+    activeHoveredFaceId = null;
+}
+
+export function getActiveHoveredFaceId(): string | null {
+    return activeHoveredFaceId;
 }
 
 export function getDwellProgress(faceId: string): number {
-    const tracker = dwellTrackers.get(faceId);
+    const tracker = Array.from(dwellTrackers.values()).find((entry) => entry.faceId === faceId);
     if (!tracker) return 0;
     const elapsed = Date.now() - tracker.startTime;
-    return Math.min(1, elapsed / PRESENCE_THRESHOLD_MS);
+    return Math.min(1, elapsed / HOVER_THRESHOLD_MS);
 }

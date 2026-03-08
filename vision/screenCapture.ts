@@ -15,6 +15,7 @@ declare global {
             showOverlay: (data: any) => void;
             hideOverlay: () => void;
             updateOverlay: (data: any) => void;
+            setOverlayNoteInteractive: (interactive: boolean) => void;
             onOverlayData: (callback: (data: any) => void) => void;
             onOverlayTrackingCommand: (callback: (command: OverlayTrackingCommand) => void) => void;
             onGazeData: (callback: (gaze: GazePoint) => void) => void;

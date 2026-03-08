@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     showOverlay: (data: any) => ipcRenderer.send('show-overlay', data),
     hideOverlay: () => ipcRenderer.send('hide-overlay'),
     updateOverlay: (data: any) => ipcRenderer.send('update-overlay', data),
+    setOverlayNoteInteractive: (interactive: boolean) => ipcRenderer.send('set-overlay-note-interactive', interactive),
 
     // Overlay listener (for overlay window)
     onOverlayData: (callback: (data: any) => void) => {

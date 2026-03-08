@@ -92,7 +92,7 @@ export function CalibrationOverlay({ onComplete }: CalibrationOverlayProps) {
                 onClick={onComplete}
                 className="absolute bottom-8 right-8 btn-secondary text-sm"
             >
-                Skip Calibration →
+                Skip Calibration
             </button>
         </div>
     );

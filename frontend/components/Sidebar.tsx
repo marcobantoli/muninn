@@ -6,9 +6,9 @@ interface SidebarProps {
 }
 
 const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: '🏠', description: 'Profile overview' },
-    { id: 'profile-editor', label: 'Profile Editor', icon: '✏️', description: 'Create & edit' },
-    { id: 'live-assistant', label: 'Live Assistant', icon: '👁️', description: 'Recognition loop' },
+    { id: 'dashboard', label: 'Dashboard', icon: 'D', description: 'Profile overview' },
+    { id: 'profile-editor', label: 'Profile Editor', icon: 'P', description: 'Create & edit' },
+    { id: 'live-assistant', label: 'Live Assistant', icon: 'L', description: 'Recognition loop' },
 ];
 export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
     return (
@@ -17,8 +17,8 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
             <div className="p-6 border-b border-muninn-border">
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-muninn-accent to-muninn-accent-light
-                          flex items-center justify-center text-xl shadow-glow">
-                        🧠
+                                                    flex items-center justify-center text-sm font-semibold shadow-glow">
+                                                MN
                     </div>
                     <div>
                         <h1 className="text-lg font-bold text-white tracking-tight">MUNINN</h1>
