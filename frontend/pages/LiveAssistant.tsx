@@ -48,6 +48,17 @@ export function LiveAssistant() {
   const [statusMessage, setStatusMessage] = useState("Ready to start");
   const loopRef = useRef<number | null>(null);
   const profileBuilderRef = useRef(getProfileBuilder());
+  const newFaceAttemptsRef = useRef<
+    Map<
+      string,
+      {
+        captureTime: number;
+        faceData: any;
+        lastFaceImage: string | null;
+        profileCreated: boolean;
+      }
+    >
+  >(new Map());
 
   useEffect(() => {
     activeRecognitionRef.current = appState.activeRecognition;
@@ -142,40 +153,55 @@ export function LiveAssistant() {
       const builder = profileBuilderRef.current;
       const transcript = builder.getTranscript();
 
-      if (!transcript || transcript.length < 5) {
-        setStatusMessage("Listening... (speak to build profile)");
-        return;
+      // Minimum conversation threshold to create profile
+      if (!transcript || transcript.trim().length < 10) {
+        console.log(
+          "[MUNINN] Transcript too short, using AI defaults:",
+          transcript?.length || 0,
+        );
       }
 
       try {
-        setStatusMessage("Analyzing conversation with Gemini...");
+        setStatusMessage("🎤 Analyzing conversation for new profile...");
         console.log("[MUNINN] Creating profile from hover:", {
           faceId,
-          transcriptLength: transcript.length,
+          transcriptLength: transcript?.length || 0,
+          hasImage: !!faceImage,
         });
 
+        // Send transcript to backend for analysis
         const analysisRes = await fetch(
           `${API_BASE}/conversation/analyze-text`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ transcript }),
+            body: JSON.stringify({
+              transcript: transcript || "Silent conversation",
+              relationship: "New acquaintance",
+            }),
           },
         );
 
-        if (!analysisRes.ok) throw new Error("Analysis failed");
+        if (!analysisRes.ok) {
+          throw new Error(`Analysis failed: ${analysisRes.status}`);
+        }
 
         const { analysis } = await analysisRes.json();
 
-        // Create minimal profile with captured face
+        console.log("[MUNINN] Gemini analysis complete:", analysis);
+
+        // Create profile with captured face and Gemini analysis
         const profileRes = await fetch(`${API_BASE}/profiles`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name: `Person ${Date.now()}`, // Will be refined later
-            relationship: "Contact",
+            name:
+              analysis.identity_summary?.split(" ").slice(0, 2).join(" ") ||
+              `Person ${Date.now()}`,
+            relationship: analysis.relationship || "Contact",
             face_reference_image: faceImage,
-            identity_summary: analysis.identity_summary || "New person met",
+            identity_summary:
+              analysis.identity_summary || analysis.summary || "New person met",
             hobbies: analysis.hobbies || [],
             pride_points: analysis.pride_points || [],
             emotional_anchors: analysis.emotional_anchors || [],
@@ -186,20 +212,39 @@ export function LiveAssistant() {
 
         if (profileRes.ok) {
           const newProfile = await profileRes.json();
-          console.log("[MUNINN] Profile created:", newProfile.id);
+          console.log(
+            "[MUNINN] ✓ Profile created:",
+            newProfile.id || newProfile.name,
+          );
 
-          // Refresh profiles
-          const profilesRes = await fetch(`${API_BASE}/profiles`);
-          const profiles: PersonProfile[] = await profilesRes.json();
-          profilesByIdRef.current = new Map(profiles.map((p) => [p.id, p]));
-          updateFaceMatcher(profiles);
+          // Refresh profiles list and update face matcher
+          try {
+            const profilesRes = await fetch(`${API_BASE}/profiles`);
+            if (profilesRes.ok) {
+              const profiles: PersonProfile[] = await profilesRes.json();
+              profilesByIdRef.current = new Map(profiles.map((p) => [p.id, p]));
+              updateFaceMatcher(profiles);
+              setStatusMessage(
+                "✓ Auto profile created! Review in Profile Editor",
+              );
+            }
+          } catch (refreshErr) {
+            console.warn("[MUNINN] Failed to refresh profiles:", refreshErr);
+          }
 
-          setStatusMessage("✓ New profile created! (Edit in Profile Editor)");
+          // Clear transcript for next face
           builder.clearProfile(faceId);
+
+          // Remove from new face attempts tracking
+          newFaceAttemptsRef.current.delete(faceId);
+        } else {
+          const errText = await profileRes.text();
+          console.error("[MUNINN] Profile creation failed:", errText);
+          setStatusMessage("⚠ Could not create profile");
         }
       } catch (err) {
-        console.error("[MUNINN] Profile creation failed:", err);
-        setStatusMessage("Error creating profile");
+        console.error("[MUNINN] Profile creation error:", err);
+        setStatusMessage("⚠ Error creating profile");
       }
     },
     [],
@@ -306,6 +351,56 @@ export function LiveAssistant() {
           });
 
           const activeHoverState = getActiveHoverState();
+
+          // Auto-create profile for new unrecognized faces when hovering
+          if (activeHoverState && !activeHoverState.profileId) {
+            const faceId = activeHoverState.faceId;
+            const dwellProgress = activeHoverState.progress;
+
+            // Track first encounter with this unrecognized face
+            if (!newFaceAttemptsRef.current.has(faceId)) {
+              const faceToCapture = faces.find((f: any) => f.id === faceId);
+              if (faceToCapture) {
+                const faceImage = captureFromCanvas(
+                  faceToCapture.x,
+                  faceToCapture.y,
+                  faceToCapture.width,
+                  faceToCapture.height,
+                );
+                newFaceAttemptsRef.current.set(faceId, {
+                  captureTime: Date.now(),
+                  faceData: faceToCapture,
+                  lastFaceImage: faceImage,
+                  profileCreated: false,
+                });
+              }
+            }
+
+            // When dwell reaches 80% (about 2.4 seconds), attempt profile creation
+            if (dwellProgress > 0.8) {
+              const attemptData = newFaceAttemptsRef.current.get(faceId);
+              if (attemptData && !attemptData.profileCreated) {
+                // Mark as attempted before async call
+                attemptData.profileCreated = true;
+
+                // Create profile for new face
+                if (attemptData.lastFaceImage) {
+                  void createProfileForFace(faceId, attemptData.lastFaceImage);
+                }
+              }
+            }
+          } else {
+            // Clean up tracked faces that are no longer being hovered
+            const trackedFaceIds = Array.from(
+              newFaceAttemptsRef.current.keys(),
+            );
+            trackedFaceIds.forEach((id) => {
+              if (!faces.find((f: any) => f.id === id)) {
+                newFaceAttemptsRef.current.delete(id);
+              }
+            });
+          }
+
           if (activeHoverState && !activeRecognitionRef.current) {
             if (hoverPreviewHideTimeoutRef.current !== null) {
               window.clearTimeout(hoverPreviewHideTimeoutRef.current);

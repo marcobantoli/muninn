@@ -25,42 +25,64 @@ function generateSmartDefaults(
   relationshipHint?: string,
 ): ConversationAnalysis {
   const keywords: Record<string, string[]> = {
-    hobby: ["reading", "gardening", "cooking", "music", "travel", "sports"],
-    achievement: [
-      "career",
-      "raised family",
-      "business owner",
-      "volunteer work",
+    hobby: [
+      "reading",
+      "gardening",
+      "cooking",
+      "music",
+      "travel",
+      "sports",
+      "movies",
+      "walking",
     ],
-    anchor: ["family", "children", "spouse", "grandchildren", "career"],
+    achievement: [
+      "career success",
+      "raised a family",
+      "ran a business",
+      "volunteered",
+      "built something",
+      "traveled extensively",
+    ],
+    anchor: [
+      "family",
+      "children",
+      "spouse",
+      "grandchildren",
+      "career",
+      "pets",
+      "home",
+    ],
     starter: [
-      "How are you doing?",
+      "How have you been?",
       "What have you been up to?",
       "Tell me about your day?",
+      "What are you working on?",
+      "Any good news lately?",
     ],
-    tip: ["Listen actively", "Show genuine interest", "Be patient"],
+    tip: [
+      "Listen actively and show genuine interest",
+      "Be patient and give them time to speak",
+      "Ask open-ended questions",
+      "Remember details they share",
+      "Show warmth and sincerity",
+    ],
   };
 
+  const randomItem = (arr: string[]) =>
+    arr[Math.floor(Math.random() * arr.length)];
+
+  const summary = transcript
+    ? `A person we spoke with about ${transcript.substring(0, 30)}...`
+    : "Someone we just met during a conversation";
+
   return {
-    summary: "A person we met during conversation",
-    identity_summary: transcript || "New acquaintance",
-    hobbies: [
-      keywords.hobby[Math.floor(Math.random() * keywords.hobby.length)],
-    ],
-    pride_points: [
-      keywords.achievement[
-        Math.floor(Math.random() * keywords.achievement.length)
-      ],
-    ],
-    emotional_anchors: [
-      keywords.anchor[Math.floor(Math.random() * keywords.anchor.length)],
-    ],
-    conversation_starters: [
-      keywords.starter[Math.floor(Math.random() * keywords.starter.length)],
-    ],
-    communication_tips: [
-      keywords.tip[Math.floor(Math.random() * keywords.tip.length)],
-    ],
+    summary,
+    identity_summary: transcript || "New person met during a conversation",
+    hobbies: [randomItem(keywords.hobby)],
+    pride_points: [randomItem(keywords.achievement)],
+    emotional_anchors: [randomItem(keywords.anchor)],
+    conversation_starters: [randomItem(keywords.starter)],
+    communication_tips: [randomItem(keywords.tip), "Ask follow-up questions"],
   };
 }
 
@@ -70,12 +92,15 @@ export async function analyzeConversationWithGemini(
 ): Promise<ConversationAnalysis> {
   try {
     // If transcript is too short, use keyword-based analysis
-    if (!audioTranscript || audioTranscript.length < 20) {
-      console.log("[MUNINN] Transcript too short, using keyword analysis");
-      return generateSmartDefaults(audioTranscript, relationshipHint);
+    if (!audioTranscript || audioTranscript.trim().length < 10) {
+      console.log(
+        "[MUNINN] Transcript too short, using smart defaults:",
+        audioTranscript?.length || 0,
+      );
+      return generateSmartDefaults(audioTranscript || "", relationshipHint);
     }
 
-    const prompt = `You are an AI assistant helping to create a personhood profile for someone with dementia. 
+    const prompt = `You are an AI assistant helping to create a personhood profile for someone with dementia support. 
 
 Based on this conversation transcript, extract key information to help caregivers remember important details about this person:
 
@@ -84,12 +109,10 @@ TRANSCRIPT:
 
 ${relationshipHint ? `RELATIONSHIP HINT: ${relationshipHint}` : ""}
 
-If the transcript is very short or unclear, make reasonable inferences about the person.
-
-Please respond with a JSON object containing:
+Please respond with ONLY a valid JSON object containing these fields (only include fields you can infer from the transcript, but try to include all):
 {
   "summary": "A 1-2 sentence summary of the person based on what they said",
-  "identity_summary": "Who they are in their own words or what they revealed",
+  "identity_summary": "Who they are - their own words or what they revealed [REQUIRED]",
   "hobbies": ["hobby1", "hobby2"],
   "pride_points": ["achievement or thing they're proud of"],
   "emotional_anchors": ["person or place they care about or mentioned"],
@@ -97,7 +120,12 @@ Please respond with a JSON object containing:
   "communication_tips": ["tip for conversation based on what they shared"]
 }
 
-Return ONLY valid JSON, no additional text.`;
+Requirements:
+- Return ONLY valid JSON, no markdown, no code blocks, no extra text
+- ALL arrays must be non-empty
+- identity_summary MUST be provided
+- If you cannot infer certain fields, use reasonable defaults
+- Make the response helpful for dementia care`;
 
     const url = new URL(GEMINI_BASE_URL);
     url.searchParams.append("key", GEMINI_API_KEY);
@@ -121,6 +149,11 @@ Return ONLY valid JSON, no additional text.`;
             ],
           },
         ],
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+        },
       }),
     });
 
@@ -134,31 +167,72 @@ Return ONLY valid JSON, no additional text.`;
     const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!content) {
+      console.warn("[MUNINN] No response content from Gemini, using defaults");
       throw new Error("No response content from Gemini");
     }
 
     // Parse JSON from response (may have markdown code blocks)
-    let jsonStr = content;
-    const jsonMatch = content.match(/```(?:json)?\n?([\s\S]*?)\n?```/);
+    let jsonStr = content.trim();
+    const jsonMatch = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
     if (jsonMatch) {
       jsonStr = jsonMatch[1];
     }
 
     const analysis: ConversationAnalysis = JSON.parse(jsonStr);
+
+    // Ensure all required fields are present
+    if (!analysis.identity_summary) {
+      analysis.identity_summary = audioTranscript.substring(0, 100);
+    }
+    if (!Array.isArray(analysis.hobbies) || analysis.hobbies.length === 0) {
+      analysis.hobbies = generateSmartDefaults(
+        audioTranscript,
+        relationshipHint,
+      ).hobbies;
+    }
+    if (
+      !Array.isArray(analysis.pride_points) ||
+      analysis.pride_points.length === 0
+    ) {
+      analysis.pride_points = generateSmartDefaults(
+        audioTranscript,
+        relationshipHint,
+      ).pride_points;
+    }
+    if (
+      !Array.isArray(analysis.emotional_anchors) ||
+      analysis.emotional_anchors.length === 0
+    ) {
+      analysis.emotional_anchors = generateSmartDefaults(
+        audioTranscript,
+        relationshipHint,
+      ).emotional_anchors;
+    }
+    if (
+      !Array.isArray(analysis.conversation_starters) ||
+      analysis.conversation_starters.length === 0
+    ) {
+      analysis.conversation_starters = generateSmartDefaults(
+        audioTranscript,
+        relationshipHint,
+      ).conversation_starters;
+    }
+    if (
+      !Array.isArray(analysis.communication_tips) ||
+      analysis.communication_tips.length === 0
+    ) {
+      analysis.communication_tips = generateSmartDefaults(
+        audioTranscript,
+        relationshipHint,
+      ).communication_tips;
+    }
+
     console.log("[MUNINN] Gemini analysis complete:", analysis);
     return analysis;
   } catch (err) {
     console.error("[MUNINN] Gemini analysis failed, using fallback:", err);
-    // Return a basic fallback if Gemini fails
-    return {
-      summary: "New person met during a conversation",
-      identity_summary: audioTranscript.substring(0, 100),
-      hobbies: ["Conversation"],
-      pride_points: [],
-      emotional_anchors: [],
-      conversation_starters: ["Tell me about yourself"],
-      communication_tips: ["Listen actively", "Show genuine interest"],
-    };
+    // Return smart defaults if Gemini fails
+    return generateSmartDefaults(audioTranscript, relationshipHint);
   }
 }
 
@@ -166,10 +240,18 @@ export async function transcribeAudioWithGemini(
   audioBase64: string,
 ): Promise<string> {
   try {
+    if (!audioBase64 || audioBase64.length < 10) {
+      console.warn("[MUNINN] Audio data too short or missing");
+      return "No audio captured";
+    }
+
     const url = new URL(GEMINI_BASE_URL);
     url.searchParams.append("key", GEMINI_API_KEY);
 
-    console.log("[MUNINN] Calling Gemini API for audio transcription...");
+    console.log(
+      "[MUNINN] Calling Gemini API for audio transcription, size:",
+      audioBase64.length,
+    );
     const response = await fetch(url.toString(), {
       method: "POST",
       headers: {
@@ -186,7 +268,7 @@ export async function transcribeAudioWithGemini(
                 },
               },
               {
-                text: "Please transcribe this audio conversation. Return only the transcribed text, no additional commentary.",
+                text: "Please transcribe this audio conversation. Return only the transcribed text with no additional commentary or formatting. If you cannot understand the audio, say 'Unable to transcribe audio'.",
               },
             ],
           },
@@ -202,11 +284,17 @@ export async function transcribeAudioWithGemini(
 
     const data = await response.json();
     const transcript = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
     console.log(
-      "[MUNINN] Audio transcription complete, length:",
+      "[MUNINN] Audio transcription complete, transcript length:",
       transcript.length,
     );
-    return transcript || "Audio transcription unavailable";
+
+    if (!transcript || transcript.includes("Unable to transcribe")) {
+      return "No speech detected";
+    }
+
+    return transcript.trim();
   } catch (err) {
     console.error("[MUNINN] Audio transcription failed:", err);
     return "Unable to transcribe audio at this time";
