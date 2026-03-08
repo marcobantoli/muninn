@@ -17,6 +17,7 @@ import {
   resetFaceDetection,
 } from "../../vision/faceDetection";
 import { PersonhoodCard } from "../components/PersonhoodCard";
+import { LiveProfileEditor } from "../components/LiveProfileEditor";
 import {
   processCursorFaceIntersection,
   onRecognition,
@@ -45,6 +46,7 @@ export function LiveAssistant() {
     activeRecognition: null,
   });
   const [statusMessage, setStatusMessage] = useState("Ready to start");
+  const [showProfileEditor, setShowProfileEditor] = useState(false);
   const loopRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -478,7 +480,7 @@ export function LiveAssistant() {
         </div>
 
         {/* Active Recognition Card */}
-        <div className="sticky top-8">
+        <div className="sticky top-8 space-y-4">
           {appState.activeRecognition ? (
             <PersonhoodCard
               note={appState.activeRecognition}
@@ -520,8 +522,53 @@ export function LiveAssistant() {
               </p>
             </div>
           )}
+
+          {/* Live Profile Editor Button */}
+          <button
+            onClick={() => setShowProfileEditor(true)}
+            className="w-full bg-gradient-to-r from-muninn-accent/20 to-purple-500/20 border border-muninn-accent/50 hover:border-muninn-accent text-white font-semibold py-3 px-4 rounded-2xl transition-all duration-200 hover:shadow-lg hover:shadow-muninn-accent/20"
+          >
+            <div className="flex items-center justify-center gap-2">
+              <span className="text-lg">🎙️</span>
+              <span>Start Live Profile</span>
+            </div>
+            <div className="text-xs text-muninn-text-dim mt-1">
+              Record conversation + AI analysis
+            </div>
+          </button>
         </div>
       </div>
+
+      {/* Live Profile Editor Modal */}
+      {showProfileEditor && (
+        <LiveProfileEditor
+          onProfileUpdate={async (profile) => {
+            // Save the profile to the database
+            try {
+              const res = await fetch(`${API_BASE}/profiles`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(profile),
+              });
+
+              if (res.ok) {
+                const newProfile = await res.json();
+                console.log("[MUNINN] Profile created:", newProfile);
+                // Refresh profiles list
+                const profilesRes = await fetch(`${API_BASE}/profiles`);
+                const profiles: PersonProfile[] = await profilesRes.json();
+                updateFaceMatcher(profiles);
+                setShowProfileEditor(false);
+                setStatusMessage("New profile saved successfully!");
+              }
+            } catch (err) {
+              console.error("Failed to save profile:", err);
+              setStatusMessage("Error saving profile");
+            }
+          }}
+          onClose={() => setShowProfileEditor(false)}
+        />
+      )}
     </div>
   );
 }

@@ -5,6 +5,9 @@ import { PersonProfile } from "../../shared/types";
 import {
   transcribeAudioWithGemini,
   analyzeConversationWithGemini,
+  analyzeConversationStreamingWithGemini,
+  createGeminiLiveSession,
+  StreamingProfileUpdate,
 } from "../services/geminiService";
 
 export const conversationRoutes = Router();
@@ -116,6 +119,93 @@ conversationRoutes.post(
       res
         .status(500)
         .json({ error: "Failed to create profile from conversation" });
+    }
+  },
+);
+
+// POST /api/conversation/stream-analysis
+// Real-time profile analysis with Gemini 2.5 Flash Live
+conversationRoutes.post(
+  "/stream-analysis",
+  async (req: Request, res: Response) => {
+    try {
+      const { transcript, name, relationship } = req.body;
+
+      if (!transcript) {
+        return res
+          .status(400)
+          .json({ error: "Missing required field: transcript" });
+      }
+
+      console.log("[MUNINN] Starting streaming analysis...");
+
+      // Set up SSE headers for streaming
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+
+      // Send initial connection message
+      res.write("data: " + JSON.stringify({ status: "connected" }) + "\n\n");
+
+      // Stream updates from Gemini
+      try {
+        const generator = analyzeConversationStreamingWithGemini(
+          transcript,
+          (update: StreamingProfileUpdate) => {
+            // Send each update as Server-Sent Event
+            res.write("data: " + JSON.stringify(update) + "\n\n");
+          },
+        );
+
+        for await (const update of generator) {
+          // Updates are already sent via callback
+        }
+
+        console.log("[MUNINN] Streaming analysis complete");
+        res.write(
+          "data: " +
+            JSON.stringify({
+              status: "complete",
+              message: "Analysis finished",
+            }) +
+            "\n\n",
+        );
+        res.end();
+      } catch (streamErr) {
+        console.error("[MUNINN] Stream error:", streamErr);
+        res.write(
+          "data: " +
+            JSON.stringify({ error: "Stream processing failed" }) +
+            "\n\n",
+        );
+        res.end();
+      }
+    } catch (err) {
+      console.error("[MUNINN] Streaming analysis failed:", err);
+      res.setHeader("Content-Type", "application/json");
+      res.status(500).json({ error: "Failed to start streaming analysis" });
+    }
+  },
+);
+
+// POST /api/conversation/live-session
+// Create a new live conversation session with Gemini 2.5 Flash
+conversationRoutes.post(
+  "/live-session",
+  async (req: Request, res: Response) => {
+    try {
+      console.log("[MUNINN] Creating live session...");
+      const sessionId = await createGeminiLiveSession();
+
+      res.status(201).json({
+        success: true,
+        sessionId,
+        message: "Live conversation session created",
+      });
+    } catch (err) {
+      console.error("[MUNINN] Failed to create live session:", err);
+      res.status(500).json({ error: "Failed to create live session" });
     }
   },
 );

@@ -1,7 +1,11 @@
 // ─── MUNINN Gemini AI Service ───
-// Integrates Google Gemini for conversation analysis and profile generation
+// Integrates Google Gemini 2.5 Flash Live for real-time conversation analysis
 
 const GEMINI_API_KEY = "AIzaSyDWqyJ3-3Q5rW4nZ8kL9jB0mK1vQ2xR3sT"; // Hardcoded for hackathon
+const GEMINI_LIVE_BASE_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2-5-flash-live:createSession";
+const GEMINI_STREAM_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2-5-flash:streamGenerateContent";
 const GEMINI_BASE_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent";
 
@@ -150,5 +154,188 @@ export async function transcribeAudioWithGemini(
   } catch (err) {
     console.error("[MUNINN] Audio transcription failed:", err);
     return "Unable to transcribe audio at this time";
+  }
+}
+
+// ─── Gemini 2.5 Flash Live Streaming ───
+
+export interface StreamingProfileUpdate {
+  name?: string;
+  relationship?: string;
+  summary?: string;
+  identity_summary?: string;
+  hobbies?: string[];
+  pride_points?: string[];
+  emotional_anchors?: string[];
+  conversation_starters?: string[];
+  communication_tips?: string[];
+  realtimeTranscript?: string;
+}
+
+/**
+ * Stream conversation analysis in real-time using Gemini 2.5 Flash Live
+ * Continuously analyzes conversation and updates profile fields
+ */
+export async function* analyzeConversationStreamingWithGemini(
+  conversationTranscript: string,
+  onUpdate?: (update: StreamingProfileUpdate) => void,
+): AsyncGenerator<StreamingProfileUpdate> {
+  try {
+    const systemPrompt = `You are an AI assistant helping to create a personhood profile for someone with dementia. 
+You will receive a real-time conversation transcript and continuously extract and update profile information.
+
+For EACH speaker turn or chunk of conversation, respond with a JSON object containing ANY fields that have changed or been clarified:
+{
+  "name": "person's name if mentioned",
+  "relationship": "their relationship to the user if mentioned",
+  "summary": "updated 1-2 sentence summary",
+  "identity_summary": "who they are",
+  "hobbies": ["hobby1", "hobby2"],
+  "pride_points": ["achievement1"],
+  "emotional_anchors": ["person/place they care about"],
+  "conversation_starters": ["topic they like talking about"],
+  "communication_tips": ["tip for better conversation"],
+  "realtimeTranscript": "the conversation so far"
+}
+
+IMPORTANT: Only include fields that are relevant or have changed. Return ONLY valid JSON.`;
+
+    const url = new URL(GEMINI_STREAM_URL);
+    url.searchParams.append("key", GEMINI_API_KEY);
+
+    console.log("[MUNINN] Starting Gemini 2.5 Flash streaming analysis...");
+
+    const response = await fetch(url.toString(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [
+              {
+                text: `${systemPrompt}\n\nCONVERSATION TRANSCRIPT:\n${conversationTranscript}`,
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.7,
+          topK: 40,
+          topP: 0.95,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Gemini API error: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    // Parse streaming response
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("No response stream");
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+
+        try {
+          // Handle JSON lines format from Gemini
+          const jsonMatch = line.match(/data: (.*)/) || [null, line];
+          const jsonStr = jsonMatch[1];
+
+          if (jsonStr) {
+            const parsed = JSON.parse(jsonStr);
+            const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            if (text) {
+              // Try to extract JSON from response
+              const profileMatch = text.match(/\{[\s\S]*\}/);
+              if (profileMatch) {
+                const update: StreamingProfileUpdate = JSON.parse(
+                  profileMatch[0],
+                );
+                yield update;
+                if (onUpdate) onUpdate(update);
+              }
+            }
+          }
+        } catch (e) {
+          // Skip malformed lines
+        }
+      }
+    }
+
+    console.log("[MUNINN] Streaming analysis complete");
+  } catch (err) {
+    console.error("[MUNINN] Streaming analysis failed:", err);
+    throw err;
+  }
+}
+
+/**
+ * Start a live conversation session with Gemini 2.5 Flash
+ * Returns a session ID for ongoing streaming
+ */
+export async function createGeminiLiveSession(): Promise<string> {
+  try {
+    const url = new URL(GEMINI_LIVE_BASE_URL);
+    url.searchParams.append("key", GEMINI_API_KEY);
+
+    console.log("[MUNINN] Creating Gemini 2.5 Flash Live session...");
+
+    const response = await fetch(url.toString(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "models/gemini-2-5-flash-live",
+        systemInstruction: {
+          parts: [
+            {
+              text: `You are an AI assistant for MUNINN, helping caregivers build personhood profiles through conversation. 
+Your role is to:
+1. Actively listen to the conversation
+2. Extract key personal details (hobbies, interests, relationships, achievements)
+3. Identify emotional anchors and meaningful connections
+4. Suggest conversation starters based on what you learn
+5. Provide communication tips for better interaction
+
+When you identify new information, immediately provide a JSON update.`,
+            },
+          ],
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to create live session: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    const data = await response.json();
+    const sessionId = data.session?.name || data.sessionId;
+
+    console.log("[MUNINN] Live session created:", sessionId);
+    return sessionId;
+  } catch (err) {
+    console.error("[MUNINN] Failed to create live session:", err);
+    throw err;
   }
 }
