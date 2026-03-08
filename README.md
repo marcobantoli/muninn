@@ -1,6 +1,6 @@
 # MUNINN — The Cognitive Context Assistant
 
-**AI-Augmented Personhood Retrieval for Dementia Support**
+**Contextual Personhood Retrieval for Dementia Support**
 
 MUNINN is an Electron desktop prototype that detects when a user is looking at someone on their screen and automatically provides contextual identity reminders. Designed to assist dementia patients during digital communication.
 
@@ -11,7 +11,7 @@ MUNINN is an Electron desktop prototype that detects when a user is looking at s
 3. **Cursor Tracking** — Monitors pointer position across the captured screen
 4. **Dwell Detection** — If the cursor rests on a face for >3 seconds, a recognition gap is assumed
 5. **Profile Retrieval** — Looks up the linked person profile
-6. **AI Note Generation** — Generates a 5-point contextual personhood reminder
+6. **Context Note Building** — Builds a 5-point contextual personhood reminder from stored profile data
 7. **Overlay Display** — Shows an unobtrusive overlay with name, relationship, and conversation starters
 
 ## Tech Stack
@@ -21,7 +21,7 @@ MUNINN is an Electron desktop prototype that detects when a user is looking at s
 - **Backend**: Express (inside Electron, port 3001)
 - **Database**: Firebase Firestore for profile persistence
 - **Vision**: Face detection plus cursor-based recognition targeting
-- **AI**: Template-based personhood note generator (LLM-ready)
+- **Context Builder**: Deterministic personhood note generation from structured profile data
 
 ## Quick Start
 
@@ -66,7 +66,7 @@ muninn/
 │   └── overlay/       # Transparent overlay window
 ├── backend/           # Express API server
 │   ├── routes/        # Profile CRUD, recognition events
-│   ├── services/      # Profile store, AI note generator
+│   ├── services/      # Profile store, context note builder
 │   └── seed.ts        # Sample person profiles
 ├── vision/            # Computer vision pipeline
 │   ├── faceDetection.ts
@@ -83,5 +83,5 @@ muninn/
 | POST | `/api/profiles` | Create a profile |
 | PUT | `/api/profiles/:id` | Update a profile |
 | DELETE | `/api/profiles/:id` | Delete a profile |
-| POST | `/api/recognition-event` | Trigger AI personhood note |
+| POST | `/api/recognition-event` | Build a personhood context note |
 | GET | `/api/health` | Health check |

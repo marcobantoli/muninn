@@ -57,7 +57,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
                         <span className="text-xs text-muninn-text-dim">System Ready</span>
                     </div>
                     <p className="text-[10px] text-muninn-text-muted leading-tight">
-                        AI-Augmented Personhood Retrieval for Dementia Support
+                        Contextual personhood retrieval for dementia support
                     </p>
                 </div>
             </div>

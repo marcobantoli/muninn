@@ -1,7 +1,7 @@
 {
   "name": "muninn",
   "version": "1.0.0",
-  "description": "MUNINN — The Cognitive Context Assistant: AI-Augmented Personhood Retrieval for Dementia Support",
+  "description": "MUNINN — The Cognitive Context Assistant: Contextual Personhood Retrieval for Dementia Support",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",

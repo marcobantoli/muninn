@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getProfileById } from '../services/profileService';
-import { generatePersonhoodNote } from '../services/aiService';
+import { buildPersonhoodNote } from '../services/aiService';
 
 export const recognitionRoutes = Router();
 
@@ -18,7 +18,7 @@ recognitionRoutes.post('/recognition-event', async (req: Request, res: Response)
             return res.status(404).json({ error: 'Profile not found' });
         }
 
-        const note = await generatePersonhoodNote(profile);
+        const note = await buildPersonhoodNote(profile);
 
         res.json(note);
     } catch (err) {
