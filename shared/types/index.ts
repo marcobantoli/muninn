@@ -52,11 +52,19 @@ export interface PersonhoodNote {
     generatedAt: string;
 }
 
+export interface HoverPreview {
+    title: string;
+    subtitle: string;
+    progress: number;
+    isRecognized: boolean;
+}
+
 export interface OverlayData {
     visible: boolean;
     x: number;
     y: number;
     note: PersonhoodNote | null;
+    hoverPreview?: HoverPreview | null;
 }
 
 export interface AppState {

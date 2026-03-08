@@ -5,7 +5,8 @@ import { startBackendServer } from '../backend/server';
 
 let mainWindow: BrowserWindow | null = null;
 let overlayWindow: BrowserWindow | null = null;
-let overlayHasVisibleNote = false;
+let overlayHasVisibleContent = false;
+let overlayHasInteractiveNote = false;
 let overlayNoteInteractive = false;
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
@@ -15,7 +16,7 @@ function syncOverlayVisibility(): void {
         return;
     }
 
-    if (overlayHasVisibleNote) {
+    if (overlayHasVisibleContent) {
         overlayWindow.showInactive();
     } else {
         overlayWindow.hide();
@@ -27,7 +28,7 @@ function setOverlayNoteInteractive(interactive: boolean): void {
         return;
     }
 
-    if (!overlayHasVisibleNote) {
+    if (!overlayHasInteractiveNote) {
         overlayNoteInteractive = false;
         return;
     }
@@ -106,7 +107,8 @@ ipcMain.handle('get-cursor-screen-point', () => {
 
 ipcMain.on('show-overlay', (_event, data) => {
     if (overlayWindow && !overlayWindow.isDestroyed()) {
-        overlayHasVisibleNote = Boolean(data?.visible && data?.note);
+        overlayHasVisibleContent = Boolean(data?.visible && (data?.note || data?.hoverPreview));
+        overlayHasInteractiveNote = Boolean(data?.visible && data?.note);
         overlayNoteInteractive = false;
         overlayWindow.setIgnoreMouseEvents(true, { forward: true });
         overlayWindow.webContents.send('overlay-data', data);
@@ -116,12 +118,14 @@ ipcMain.on('show-overlay', (_event, data) => {
 
 ipcMain.on('hide-overlay', () => {
     if (overlayWindow && !overlayWindow.isDestroyed()) {
-        overlayHasVisibleNote = false;
+        overlayHasVisibleContent = false;
+        overlayHasInteractiveNote = false;
         overlayNoteInteractive = false;
         overlayWindow.setIgnoreMouseEvents(true, { forward: true });
         overlayWindow.webContents.send('overlay-data', {
             visible: false,
             note: null,
+            hoverPreview: null,
             x: 0,
             y: 0
         });
@@ -131,8 +135,9 @@ ipcMain.on('hide-overlay', () => {
 
 ipcMain.on('update-overlay', (_event, data) => {
     if (overlayWindow && !overlayWindow.isDestroyed()) {
-        overlayHasVisibleNote = Boolean(data?.visible && data?.note);
-        if (!overlayHasVisibleNote && overlayNoteInteractive) {
+        overlayHasVisibleContent = Boolean(data?.visible && (data?.note || data?.hoverPreview));
+        overlayHasInteractiveNote = Boolean(data?.visible && data?.note);
+        if (!overlayHasInteractiveNote && overlayNoteInteractive) {
             overlayNoteInteractive = false;
             overlayWindow.setIgnoreMouseEvents(true, { forward: true });
         }

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import '../index.css';
-import { OverlayData } from '../../shared/types';
+import { HoverPreview, OverlayData } from '../../shared/types';
 import { PersonhoodCard } from '../components/PersonhoodCard';
 
 function OverlayApp() {
@@ -95,8 +95,55 @@ function OverlayApp() {
     function handleOverlayDismiss() {
         setNoteInteractive(false);
         setOverlayPhase('full');
-        setData((prev) => (prev ? { ...prev, visible: false, note: null } : prev));
+        setData((prev) => (prev ? { ...prev, visible: false, note: null, hoverPreview: null } : prev));
         window.electronAPI?.hideOverlay();
+    }
+
+    function renderHoverPreview(hoverPreview: HoverPreview) {
+        const statusLabel = hoverPreview.isRecognized ? 'Recognized candidate' : 'Not recognized';
+        const statusClassName = hoverPreview.isRecognized
+            ? 'border-emerald-200/50 bg-emerald-200 text-slate-950 shadow-[0_0_18px_rgba(110,231,183,0.35)]'
+            : 'border-rose-200/50 bg-rose-200 text-slate-950 shadow-[0_0_18px_rgba(253,164,175,0.35)]';
+
+        return (
+            <div
+                className="fixed z-50"
+                style={{
+                    top: 16,
+                    right: 16,
+                    width: 336,
+                    pointerEvents: 'none'
+                }}
+            >
+                <div className="animate-slide-up overflow-hidden rounded-2xl border border-white/20 bg-slate-950 text-slate-50 shadow-[0_24px_80px_rgba(2,6,23,0.9)] ring-1 ring-black/80">
+                    <div className="bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] px-4 py-3.5 backdrop-blur-md">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-amber-100">Hover Target</div>
+                            <div className="mt-1.5 text-base font-semibold leading-tight text-white">{hoverPreview.title}</div>
+                            <div className="mt-0.5 text-[13px] text-slate-100">{hoverPreview.subtitle}</div>
+                        </div>
+                        <div className="rounded-full border border-amber-200/60 bg-amber-200 px-3 py-1 text-[11px] font-semibold text-slate-950 shadow-[0_0_20px_rgba(253,224,71,0.35)]">
+                            {Math.round(hoverPreview.progress * 100)}%
+                        </div>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                        <div className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${statusClassName}`}>
+                            {statusLabel}
+                        </div>
+                        <div className="text-[11px] text-slate-200">Hold to confirm</div>
+                    </div>
+                    <div className="mt-3.5 h-2 overflow-hidden rounded-full bg-white/20 ring-1 ring-white/10">
+                        <div
+                            className="h-full rounded-full bg-gradient-to-r from-amber-200 via-yellow-300 to-lime-300 transition-all duration-100"
+                            style={{ width: `${Math.max(6, hoverPreview.progress * 100)}%` }}
+                        />
+                    </div>
+                    <div className="mt-2.5 text-[11px] text-slate-200">Hold the cursor on the face to trigger recognition.</div>
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     return (
@@ -148,6 +195,8 @@ function OverlayApp() {
                     )}
                 </div>
             )}
+
+            {data?.visible && !data.note && data.hoverPreview && renderHoverPreview(data.hoverPreview)}
         </>
     );
 }

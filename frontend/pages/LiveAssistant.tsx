@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { CursorPoint, PersonhoodNote, AppState } from '../../shared/types';
+import { CursorPoint, HoverPreview, PersonProfile, PersonhoodNote, AppState } from '../../shared/types';
 import { startScreenCapture, stopScreenCapture, getVideoElement } from '../../vision/screenCapture';
-import { detectFaces, initFaceDetection } from '../../vision/faceDetection';
+import { detectFaces, initFaceDetection, resetFaceDetection } from '../../vision/faceDetection';
 import {
     processCursorFaceIntersection, onRecognition, resetRecognitionEngine,
     setHcpMode, getDwellProgress,
-    updateFaceMatcher, FaceScreenPosition, getActiveHoveredFaceId
+    updateFaceMatcher, getActiveHoveredFaceId, getActiveHoverState
 } from '../../vision/recognitionEngine';
 import { HcpBanner } from '../components/HcpBanner';
 
@@ -16,6 +16,9 @@ export function LiveAssistant() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const overlayHideTimeoutRef = useRef<number | null>(null);
     const recognitionLoopActiveRef = useRef(false);
+    const activeRecognitionRef = useRef<PersonhoodNote | null>(null);
+    const profilesByIdRef = useRef<Map<string, PersonProfile>>(new Map());
+    const lastHoverPreviewRef = useRef<string | null>(null);
     const [appState, setAppState] = useState<AppState>({
         isCapturing: false,
         isCalibrated: true,
@@ -26,10 +29,15 @@ export function LiveAssistant() {
     const [statusMessage, setStatusMessage] = useState('Ready to start');
     const loopRef = useRef<number | null>(null);
 
+    useEffect(() => {
+        activeRecognitionRef.current = appState.activeRecognition;
+    }, [appState.activeRecognition]);
+
     // Recognition callback
     useEffect(() => {
         const unsub = onRecognition((note: PersonhoodNote, facePosition) => {
             setAppState((prev: AppState) => ({ ...prev, activeRecognition: note }));
+            lastHoverPreviewRef.current = null;
 
             if (overlayHideTimeoutRef.current !== null) {
                 window.clearTimeout(overlayHideTimeoutRef.current);
@@ -39,6 +47,7 @@ export function LiveAssistant() {
                 window.electronAPI.showOverlay({
                     visible: true,
                     note,
+                    hoverPreview: null,
                     x: Math.max(16, screen.width - 356),
                     y: 16
                 });
@@ -72,11 +81,13 @@ export function LiveAssistant() {
             setStatusMessage('Loading profiles and building Face Matcher...');
             const res = await fetch(`${API_BASE}/profiles`);
             if (res.ok) {
-                const profiles = await res.json();
+                const profiles: PersonProfile[] = await res.json();
                 console.log(`[MUNINN] Fetched ${profiles.length} profiles from API. Building Face Matcher...`);
+                profilesByIdRef.current = new Map(profiles.map((profile) => [profile.id, profile]));
                 updateFaceMatcher(profiles);
             } else {
                 console.warn('[MUNINN] Failed to fetch profiles from API. Face Matcher might not work.');
+                profilesByIdRef.current = new Map();
             }
 
             let videoEl: HTMLVideoElement;
@@ -147,6 +158,37 @@ export function LiveAssistant() {
                         height: video.videoHeight || 1080,
                     });
 
+                    const activeHoverState = getActiveHoverState();
+                    if (activeHoverState && !activeRecognitionRef.current) {
+                        const matchedProfile = activeHoverState.profileId
+                            ? profilesByIdRef.current.get(activeHoverState.profileId)
+                            : null;
+
+                        const hoverPreview: HoverPreview = {
+                            title: matchedProfile?.name || 'Face detected',
+                            subtitle: matchedProfile?.relationship || (activeHoverState.profileId ? 'Profile linked' : 'Hover to identify'),
+                            progress: activeHoverState.progress,
+                            isRecognized: Boolean(matchedProfile)
+                        };
+
+                        const hoverPreviewKey = `${hoverPreview.title}|${hoverPreview.subtitle}|${Math.round(hoverPreview.progress * 100)}`;
+                        if (lastHoverPreviewRef.current !== hoverPreviewKey) {
+                            lastHoverPreviewRef.current = hoverPreviewKey;
+                            window.electronAPI?.updateOverlay({
+                                visible: true,
+                                note: null,
+                                hoverPreview,
+                                x: Math.max(16, screen.width - 356),
+                                y: 16
+                            });
+                        }
+                    } else {
+                        if (lastHoverPreviewRef.current !== null && !activeRecognitionRef.current) {
+                            lastHoverPreviewRef.current = null;
+                            window.electronAPI?.hideOverlay();
+                        }
+                    }
+
                     setAppState((prev: AppState) => ({
                         ...prev,
                         detectedFaces: faces,
@@ -183,7 +225,10 @@ export function LiveAssistant() {
             overlayHideTimeoutRef.current = null;
         }
         stopScreenCapture();
+        resetFaceDetection();
         resetRecognitionEngine();
+        profilesByIdRef.current = new Map();
+        lastHoverPreviewRef.current = null;
         setAppState((prev: AppState) => ({
             ...prev,
             isCapturing: false,

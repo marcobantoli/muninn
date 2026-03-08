@@ -3,6 +3,10 @@ import * as faceapi from 'face-api.js';
 import { FaceBoundingBox } from '../shared/types';
 
 let isInitialized = false;
+const EXTRACTION_INTERVAL = 1000;
+const TRACKING_CENTER_DISTANCE_PX = 90;
+const TRACKING_IOU_THRESHOLD = 0.2;
+const MATCH_DISTANCE_THRESHOLD = 0.5;
 
 export async function initFaceDetection(): Promise<void> {
     if (isInitialized) return;
@@ -31,11 +35,56 @@ export function isFaceDetectionReady(): boolean {
 // Global cache to avoid running heavy extraction every single frame (~10fps)
 // We only extract descriptors once per second to save CPU
 let lastExtractionTime = 0;
-const EXTRACTION_INTERVAL = 1000;
 let cachedFaces: FaceWithDescriptor[] = [];
 
 export interface FaceWithDescriptor extends FaceBoundingBox {
     descriptor: Float32Array;
+}
+
+function getBoxCenter(box: Pick<FaceBoundingBox, 'x' | 'y' | 'width' | 'height'>): { x: number; y: number } {
+    return {
+        x: box.x + box.width / 2,
+        y: box.y + box.height / 2
+    };
+}
+
+function getCenterDistance(
+    left: Pick<FaceBoundingBox, 'x' | 'y' | 'width' | 'height'>,
+    right: Pick<FaceBoundingBox, 'x' | 'y' | 'width' | 'height'>
+): number {
+    const leftCenter = getBoxCenter(left);
+    const rightCenter = getBoxCenter(right);
+    return Math.hypot(leftCenter.x - rightCenter.x, leftCenter.y - rightCenter.y);
+}
+
+function getIntersectionOverUnion(
+    left: Pick<FaceBoundingBox, 'x' | 'y' | 'width' | 'height'>,
+    right: Pick<FaceBoundingBox, 'x' | 'y' | 'width' | 'height'>
+): number {
+    const x1 = Math.max(left.x, right.x);
+    const y1 = Math.max(left.y, right.y);
+    const x2 = Math.min(left.x + left.width, right.x + right.width);
+    const y2 = Math.min(left.y + left.height, right.y + right.height);
+
+    const intersectionWidth = Math.max(0, x2 - x1);
+    const intersectionHeight = Math.max(0, y2 - y1);
+    const intersectionArea = intersectionWidth * intersectionHeight;
+    if (intersectionArea === 0) {
+        return 0;
+    }
+
+    const leftArea = left.width * left.height;
+    const rightArea = right.width * right.height;
+    const unionArea = leftArea + rightArea - intersectionArea;
+    return unionArea > 0 ? intersectionArea / unionArea : 0;
+}
+
+function findTrackedFaceMatch(box: Pick<FaceBoundingBox, 'x' | 'y' | 'width' | 'height'>): FaceWithDescriptor | undefined {
+    return cachedFaces.find((cachedFace) => {
+        const centerDistance = getCenterDistance(cachedFace, box);
+        const overlap = getIntersectionOverUnion(cachedFace, box);
+        return centerDistance <= TRACKING_CENTER_DISTANCE_PX && overlap >= TRACKING_IOU_THRESHOLD;
+    });
 }
 
 export async function detectFaces(videoElement: HTMLVideoElement | HTMLCanvasElement): Promise<FaceWithDescriptor[]> {
@@ -56,17 +105,9 @@ export async function detectFaces(videoElement: HTMLVideoElement | HTMLCanvasEle
                 let faceId = `face-${now}-${i}`;
 
                 // Inherit ID from previously cached faces to keep dwell tracking stable
-                for (const cached of cachedFaces as any[]) {
-                    const cx1 = cached.x + cached.width / 2;
-                    const cy1 = cached.y + cached.height / 2;
-                    const cx2 = box.x + box.width / 2;
-                    const cy2 = box.y + box.height / 2;
-                    const dist = Math.sqrt(Math.pow(cx1 - cx2, 2) + Math.pow(cy1 - cy2, 2));
-
-                    if (dist < 150) {
-                        faceId = cached.id;
-                        break;
-                    }
+                const trackedFace = findTrackedFaceMatch(box);
+                if (trackedFace) {
+                    faceId = trackedFace.id;
                 }
 
                 console.log(`[MUNINN] Full extraction generated descriptor for: ${faceId}, sum: ${det.descriptor ? Array.from(det.descriptor).reduce((a, b) => a + Math.abs(b), 0) : 0}`);
@@ -95,18 +136,10 @@ export async function detectFaces(videoElement: HTMLVideoElement | HTMLCanvasEle
                 let matchedDescriptor: any = new Float32Array(new ArrayBuffer(128 * 4));
                 let faceId = `face-fast-${now}-${i}`;
 
-                for (const cached of cachedFaces as any[]) {
-                    const cx1 = cached.x + cached.width / 2;
-                    const cy1 = cached.y + cached.height / 2;
-                    const cx2 = box.x + box.width / 2;
-                    const cy2 = box.y + box.height / 2;
-                    const dist = Math.sqrt(Math.pow(cx1 - cx2, 2) + Math.pow(cy1 - cy2, 2));
-
-                    if (dist < 150) { // If centers are close, it's the same face
-                        faceId = cached.id;
-                        matchedDescriptor = cached.descriptor;
-                        break;
-                    }
+                const trackedFace = findTrackedFaceMatch(box);
+                if (trackedFace) {
+                    faceId = trackedFace.id;
+                    matchedDescriptor = trackedFace.descriptor;
                 }
 
                 // Explicitly satisfy TS by casting to any first
@@ -154,8 +187,8 @@ export function getFaceMatcher(labeledDescriptors: { id: string; descriptor: Flo
 
     console.log(`[MUNINN] Built FaceMatcher with ${labeledFaces.length} profiles.`);
 
-    // 0.7 is a slightly relaxed distance threshold (default is 0.6)
-    return new faceapi.FaceMatcher(labeledFaces, 0.7);
+    // Use a stricter threshold because each profile currently stores only one enrollment image.
+    return new faceapi.FaceMatcher(labeledFaces, MATCH_DISTANCE_THRESHOLD);
 }
 
 export function resetFaceDetection(): void {

@@ -17,6 +17,12 @@ export interface FaceScreenPosition {
     height: number;
 }
 
+export interface ActiveHoverState {
+    faceId: string;
+    profileId?: string;
+    progress: number;
+}
+
 interface DwellTracker {
     faceId: string;
     profileId?: string;
@@ -250,6 +256,23 @@ export function resetRecognitionEngine(): void {
 
 export function getActiveHoveredFaceId(): string | null {
     return activeHoveredFaceId;
+}
+
+export function getActiveHoverState(): ActiveHoverState | null {
+    if (!activeHoveredFaceId) {
+        return null;
+    }
+
+    const tracker = Array.from(dwellTrackers.values()).find((entry) => entry.faceId === activeHoveredFaceId);
+    if (!tracker) {
+        return null;
+    }
+
+    return {
+        faceId: tracker.faceId,
+        profileId: tracker.profileId,
+        progress: getDwellProgress(tracker.faceId)
+    };
 }
 
 export function getDwellProgress(faceId: string): number {
