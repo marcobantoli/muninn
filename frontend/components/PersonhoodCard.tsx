@@ -100,22 +100,6 @@ export function PersonhoodCard({ note, onDismiss }: PersonhoodCardProps) {
                 </div>
             </div>
 
-            {note.hcpGuidance && note.hcpGuidance.length > 0 && (
-                <div className="border-t border-white/10 bg-emerald-300/8 p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xs font-medium uppercase tracking-[0.24em] text-emerald-200">HCP Guidance</span>
-                    </div>
-                    <div className="space-y-1.5">
-                        {note.hcpGuidance.map((tip, i) => (
-                            <div key={i} className="flex items-start gap-2 text-xs">
-                                <span className="mt-0.5 text-emerald-300/70">›</span>
-                                <span className="leading-relaxed text-slate-200">{tip}</span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
             <div className="border-t border-white/10 bg-slate-900/90 px-4 py-3">
                 <span className="text-[10px] uppercase tracking-[0.24em] text-slate-400">
                     Generated at {new Date(note.generatedAt).toLocaleTimeString()}

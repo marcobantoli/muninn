@@ -4,10 +4,9 @@ import { startScreenCapture, stopScreenCapture, getVideoElement } from '../../vi
 import { detectFaces, initFaceDetection, resetFaceDetection } from '../../vision/faceDetection';
 import {
     processCursorFaceIntersection, onRecognition, resetRecognitionEngine,
-    setHcpMode, getDwellProgress,
+    getDwellProgress,
     updateFaceMatcher, getActiveHoveredFaceId, getActiveHoverState
 } from '../../vision/recognitionEngine';
-import { HcpBanner } from '../components/HcpBanner';
 
 const API_BASE = 'http://localhost:3001/api';
 const RECOGNITION_LOOP_INTERVAL_MS = 100;
@@ -15,6 +14,7 @@ const RECOGNITION_LOOP_INTERVAL_MS = 100;
 export function LiveAssistant() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const overlayHideTimeoutRef = useRef<number | null>(null);
+    const hoverPreviewHideTimeoutRef = useRef<number | null>(null);
     const recognitionLoopActiveRef = useRef(false);
     const activeRecognitionRef = useRef<PersonhoodNote | null>(null);
     const profilesByIdRef = useRef<Map<string, PersonProfile>>(new Map());
@@ -22,7 +22,6 @@ export function LiveAssistant() {
     const [appState, setAppState] = useState<AppState>({
         isCapturing: false,
         isCalibrated: true,
-        hcpMode: false,
         detectedFaces: [],
         activeRecognition: null,
     });
@@ -38,6 +37,11 @@ export function LiveAssistant() {
         const unsub = onRecognition((note: PersonhoodNote, facePosition) => {
             setAppState((prev: AppState) => ({ ...prev, activeRecognition: note }));
             lastHoverPreviewRef.current = null;
+
+            if (hoverPreviewHideTimeoutRef.current !== null) {
+                window.clearTimeout(hoverPreviewHideTimeoutRef.current);
+                hoverPreviewHideTimeoutRef.current = null;
+            }
 
             if (overlayHideTimeoutRef.current !== null) {
                 window.clearTimeout(overlayHideTimeoutRef.current);
@@ -67,6 +71,10 @@ export function LiveAssistant() {
             if (overlayHideTimeoutRef.current !== null) {
                 window.clearTimeout(overlayHideTimeoutRef.current);
                 overlayHideTimeoutRef.current = null;
+            }
+            if (hoverPreviewHideTimeoutRef.current !== null) {
+                window.clearTimeout(hoverPreviewHideTimeoutRef.current);
+                hoverPreviewHideTimeoutRef.current = null;
             }
             unsub();
         };
@@ -160,18 +168,40 @@ export function LiveAssistant() {
 
                     const activeHoverState = getActiveHoverState();
                     if (activeHoverState && !activeRecognitionRef.current) {
+                        if (hoverPreviewHideTimeoutRef.current !== null) {
+                            window.clearTimeout(hoverPreviewHideTimeoutRef.current);
+                            hoverPreviewHideTimeoutRef.current = null;
+                        }
+
                         const matchedProfile = activeHoverState.profileId
                             ? profilesByIdRef.current.get(activeHoverState.profileId)
                             : null;
 
+                        const hoverStatus = activeHoverState.confidence === 'high' && matchedProfile
+                            ? 'recognized'
+                            : activeHoverState.confidence === 'low' && matchedProfile
+                                ? 'low-confidence'
+                                : 'unrecognized';
+
+                        const hoverTitle = hoverStatus === 'unrecognized'
+                            ? 'Face detected'
+                            : matchedProfile?.name || 'Face detected';
+
+                        const hoverSubtitle = hoverStatus === 'recognized'
+                            ? matchedProfile?.relationship || 'Profile linked'
+                            : hoverStatus === 'low-confidence'
+                                ? `${matchedProfile?.relationship || 'Possible match'} · low confidence`
+                                : 'No linked profile match';
+
                         const hoverPreview: HoverPreview = {
-                            title: matchedProfile?.name || 'Face detected',
-                            subtitle: matchedProfile?.relationship || (activeHoverState.profileId ? 'Profile linked' : 'Hover to identify'),
+                            title: hoverTitle,
+                            subtitle: hoverSubtitle,
                             progress: activeHoverState.progress,
-                            isRecognized: Boolean(matchedProfile)
+                            status: hoverStatus,
+                            distance: activeHoverState.distance
                         };
 
-                        const hoverPreviewKey = `${hoverPreview.title}|${hoverPreview.subtitle}|${Math.round(hoverPreview.progress * 100)}`;
+                        const hoverPreviewKey = `${hoverPreview.title}|${hoverPreview.subtitle}|${hoverPreview.status}|${Math.round(hoverPreview.progress * 100)}`;
                         if (lastHoverPreviewRef.current !== hoverPreviewKey) {
                             lastHoverPreviewRef.current = hoverPreviewKey;
                             window.electronAPI?.updateOverlay({
@@ -184,8 +214,17 @@ export function LiveAssistant() {
                         }
                     } else {
                         if (lastHoverPreviewRef.current !== null && !activeRecognitionRef.current) {
-                            lastHoverPreviewRef.current = null;
-                            window.electronAPI?.hideOverlay();
+                            if (hoverPreviewHideTimeoutRef.current !== null) {
+                                window.clearTimeout(hoverPreviewHideTimeoutRef.current);
+                            }
+
+                            hoverPreviewHideTimeoutRef.current = window.setTimeout(() => {
+                                lastHoverPreviewRef.current = null;
+                                hoverPreviewHideTimeoutRef.current = null;
+                                if (!activeRecognitionRef.current) {
+                                    window.electronAPI?.hideOverlay();
+                                }
+                            }, 180);
                         }
                     }
 
@@ -223,6 +262,10 @@ export function LiveAssistant() {
         if (overlayHideTimeoutRef.current !== null) {
             window.clearTimeout(overlayHideTimeoutRef.current);
             overlayHideTimeoutRef.current = null;
+        }
+        if (hoverPreviewHideTimeoutRef.current !== null) {
+            window.clearTimeout(hoverPreviewHideTimeoutRef.current);
+            hoverPreviewHideTimeoutRef.current = null;
         }
         stopScreenCapture();
         resetFaceDetection();
@@ -303,12 +346,6 @@ export function LiveAssistant() {
         });
     }
 
-    function toggleHcpMode() {
-        const newMode = !appState.hcpMode;
-        setHcpMode(newMode);
-        setAppState((prev: AppState) => ({ ...prev, hcpMode: newMode }));
-    }
-
     return (
         <div className="p-8 max-w-7xl mx-auto">
             {/* Header */}
@@ -322,18 +359,6 @@ export function LiveAssistant() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    {/* HCP Mode Toggle */}
-                    <button
-                        id="hcp-toggle"
-                        onClick={toggleHcpMode}
-                        className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${appState.hcpMode
-                            ? 'bg-muninn-success/20 text-muninn-success border border-muninn-success/30'
-                            : 'bg-muninn-surface text-muninn-text-dim border border-muninn-border hover:border-muninn-success/30'
-                            }`}
-                    >
-                        {appState.hcpMode ? 'HCP Mode ON' : 'HCP Mode'}
-                    </button>
-
                     {/* Start/Stop */}
                     {appState.isCapturing ? (
                         <button id="stop-btn" onClick={stopLoop} className="btn-danger text-sm">
@@ -346,9 +371,6 @@ export function LiveAssistant() {
                     )}
                 </div>
             </div>
-
-            {/* HCP Banner */}
-            {appState.hcpMode && <HcpBanner />}
 
             {/* Main Content */}
             <div className="grid grid-cols-3 gap-6">

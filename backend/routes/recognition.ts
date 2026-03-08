@@ -7,7 +7,7 @@ export const recognitionRoutes = Router();
 // POST /api/recognition-event
 recognitionRoutes.post('/recognition-event', async (req: Request, res: Response) => {
     try {
-        const { profileId, hcpMode } = req.body;
+        const { profileId } = req.body;
 
         if (!profileId) {
             return res.status(400).json({ error: 'profileId is required' });
@@ -18,7 +18,7 @@ recognitionRoutes.post('/recognition-event', async (req: Request, res: Response)
             return res.status(404).json({ error: 'Profile not found' });
         }
 
-        const note = await generatePersonhoodNote(profile, hcpMode || false);
+        const note = await generatePersonhoodNote(profile);
 
         res.json(note);
     } catch (err) {

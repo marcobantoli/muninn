@@ -7,6 +7,7 @@ const EXTRACTION_INTERVAL = 1000;
 const TRACKING_CENTER_DISTANCE_PX = 90;
 const TRACKING_IOU_THRESHOLD = 0.2;
 const MATCH_DISTANCE_THRESHOLD = 0.5;
+const LOW_CONFIDENCE_DISTANCE_THRESHOLD = 0.6;
 
 export async function initFaceDetection(): Promise<void> {
     if (isInitialized) return;
@@ -36,9 +37,16 @@ export function isFaceDetectionReady(): boolean {
 // We only extract descriptors once per second to save CPU
 let lastExtractionTime = 0;
 let cachedFaces: FaceWithDescriptor[] = [];
+let labeledDescriptorCache: Array<{ id: string; descriptor: Float32Array }> = [];
 
 export interface FaceWithDescriptor extends FaceBoundingBox {
     descriptor: Float32Array;
+}
+
+export interface FaceMatchResult {
+    profileId?: string;
+    distance?: number;
+    confidence: 'high' | 'low' | 'none';
 }
 
 function getBoxCenter(box: Pick<FaceBoundingBox, 'x' | 'y' | 'width' | 'height'>): { x: number; y: number } {
@@ -178,8 +186,11 @@ export async function extractFaceDescriptorFromImage(imageElement: HTMLImageElem
 export function getFaceMatcher(labeledDescriptors: { id: string; descriptor: Float32Array }[]): faceapi.FaceMatcher | null {
     if (labeledDescriptors.length === 0) {
         console.log('[MUNINN] No face descriptors available for FaceMatcher');
+        labeledDescriptorCache = [];
         return null;
     }
+
+    labeledDescriptorCache = labeledDescriptors;
 
     const labeledFaces = labeledDescriptors.map(
         l => new faceapi.LabeledFaceDescriptors(l.id, [l.descriptor])
@@ -191,6 +202,57 @@ export function getFaceMatcher(labeledDescriptors: { id: string; descriptor: Flo
     return new faceapi.FaceMatcher(labeledFaces, MATCH_DISTANCE_THRESHOLD);
 }
 
+export function getBestFaceMatch(descriptor?: Float32Array): FaceMatchResult {
+    if (!descriptor || labeledDescriptorCache.length === 0) {
+        return { confidence: 'none' };
+    }
+
+    let bestMatch: { id: string; distance: number } | null = null;
+
+    for (const labeledDescriptor of labeledDescriptorCache) {
+        if (labeledDescriptor.descriptor.length !== descriptor.length) {
+            continue;
+        }
+
+        let squaredDistance = 0;
+        for (let index = 0; index < descriptor.length; index++) {
+            const delta = descriptor[index] - labeledDescriptor.descriptor[index];
+            squaredDistance += delta * delta;
+        }
+
+        const distance = Math.sqrt(squaredDistance);
+        if (!bestMatch || distance < bestMatch.distance) {
+            bestMatch = { id: labeledDescriptor.id, distance };
+        }
+    }
+
+    if (!bestMatch) {
+        return { confidence: 'none' };
+    }
+
+    if (bestMatch.distance <= MATCH_DISTANCE_THRESHOLD) {
+        return {
+            profileId: bestMatch.id,
+            distance: bestMatch.distance,
+            confidence: 'high'
+        };
+    }
+
+    if (bestMatch.distance <= LOW_CONFIDENCE_DISTANCE_THRESHOLD) {
+        return {
+            profileId: bestMatch.id,
+            distance: bestMatch.distance,
+            confidence: 'low'
+        };
+    }
+
+    return {
+        distance: bestMatch.distance,
+        confidence: 'none'
+    };
+}
+
 export function resetFaceDetection(): void {
     cachedFaces = [];
+    lastExtractionTime = 0;
 }

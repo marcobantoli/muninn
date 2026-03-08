@@ -100,10 +100,21 @@ function OverlayApp() {
     }
 
     function renderHoverPreview(hoverPreview: HoverPreview) {
-        const statusLabel = hoverPreview.isRecognized ? 'Recognized candidate' : 'Not recognized';
-        const statusClassName = hoverPreview.isRecognized
+        const statusLabel = hoverPreview.status === 'recognized'
+            ? 'Recognized candidate'
+            : hoverPreview.status === 'low-confidence'
+                ? 'Low confidence'
+                : 'Not recognized';
+        const statusClassName = hoverPreview.status === 'recognized'
             ? 'border-emerald-200/50 bg-emerald-200 text-slate-950 shadow-[0_0_18px_rgba(110,231,183,0.35)]'
-            : 'border-rose-200/50 bg-rose-200 text-slate-950 shadow-[0_0_18px_rgba(253,164,175,0.35)]';
+            : hoverPreview.status === 'low-confidence'
+                ? 'border-amber-200/50 bg-amber-200 text-slate-950 shadow-[0_0_18px_rgba(253,224,71,0.35)]'
+                : 'border-rose-200/50 bg-rose-200 text-slate-950 shadow-[0_0_18px_rgba(253,164,175,0.35)]';
+        const progressClassName = hoverPreview.status === 'recognized'
+            ? 'from-emerald-200 via-lime-300 to-cyan-300'
+            : hoverPreview.status === 'low-confidence'
+                ? 'from-amber-200 via-yellow-300 to-orange-300'
+                : 'from-rose-200 via-orange-300 to-amber-300';
 
         return (
             <div
@@ -111,35 +122,47 @@ function OverlayApp() {
                 style={{
                     top: 16,
                     right: 16,
-                    width: 336,
+                    width: 360,
                     pointerEvents: 'none'
                 }}
             >
-                <div className="animate-slide-up overflow-hidden rounded-2xl border border-white/20 bg-slate-950 text-slate-50 shadow-[0_24px_80px_rgba(2,6,23,0.9)] ring-1 ring-black/80">
-                    <div className="bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] px-4 py-3.5 backdrop-blur-md">
-                    <div className="flex items-center justify-between gap-3">
-                        <div>
-                            <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-amber-100">Hover Target</div>
-                            <div className="mt-1.5 text-base font-semibold leading-tight text-white">{hoverPreview.title}</div>
-                            <div className="mt-0.5 text-[13px] text-slate-100">{hoverPreview.subtitle}</div>
+                <div className="animate-slide-up overflow-hidden rounded-2xl border border-white/18 bg-slate-950/98 text-slate-50 shadow-[0_24px_80px_rgba(2,6,23,0.92)] ring-1 ring-black/80 transition-all duration-200">
+                    <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_left,_rgba(148,163,184,0.14),_transparent_46%),linear-gradient(180deg,rgba(15,23,42,0.99),rgba(2,6,23,0.98))] px-4 py-4 backdrop-blur-md">
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-200/90">Hover Target</div>
+                                <div className="mt-2 text-base font-semibold leading-tight text-white">{hoverPreview.title}</div>
+                                <div className="mt-1 text-[13px] text-slate-200">{hoverPreview.subtitle}</div>
+                            </div>
+                            <div className="rounded-full border border-white/15 bg-white px-3 py-1 text-[11px] font-semibold text-slate-950 shadow-[0_0_18px_rgba(255,255,255,0.18)]">
+                                {Math.round(hoverPreview.progress * 100)}%
+                            </div>
                         </div>
-                        <div className="rounded-full border border-amber-200/60 bg-amber-200 px-3 py-1 text-[11px] font-semibold text-slate-950 shadow-[0_0_20px_rgba(253,224,71,0.35)]">
-                            {Math.round(hoverPreview.progress * 100)}%
+
+                        <div className="mt-4 flex items-center justify-between gap-3">
+                            <div className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${statusClassName}`}>
+                                {statusLabel}
+                            </div>
+                            <div className="text-[11px] text-slate-300">
+                                {hoverPreview.distance !== undefined ? `Distance ${hoverPreview.distance.toFixed(3)}` : 'Hold to confirm'}
+                            </div>
                         </div>
                     </div>
-                    <div className="mt-3 flex items-center justify-between gap-3">
-                        <div className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${statusClassName}`}>
-                            {statusLabel}
+
+                    <div className="space-y-3 bg-slate-950/98 px-4 py-4">
+                        <div className="h-2 overflow-hidden rounded-full bg-white/12 ring-1 ring-white/10">
+                            <div
+                                className={`h-full rounded-full bg-gradient-to-r ${progressClassName} transition-all duration-150`}
+                                style={{ width: `${Math.max(8, hoverPreview.progress * 100)}%` }}
+                            />
                         </div>
-                        <div className="text-[11px] text-slate-200">Hold to confirm</div>
-                    </div>
-                    <div className="mt-3.5 h-2 overflow-hidden rounded-full bg-white/20 ring-1 ring-white/10">
-                        <div
-                            className="h-full rounded-full bg-gradient-to-r from-amber-200 via-yellow-300 to-lime-300 transition-all duration-100"
-                            style={{ width: `${Math.max(6, hoverPreview.progress * 100)}%` }}
-                        />
-                    </div>
-                    <div className="mt-2.5 text-[11px] text-slate-200">Hold the cursor on the face to trigger recognition.</div>
+                        <div className="rounded-2xl border border-white/8 bg-white/5 px-3 py-2.5 text-[11px] text-slate-200">
+                            {hoverPreview.status === 'recognized'
+                                ? 'Hold the cursor steady to open the full information card.'
+                                : hoverPreview.status === 'low-confidence'
+                                    ? 'Possible match detected. Hold steady to keep tracking while confidence improves.'
+                                    : 'This face does not match a linked profile yet.'}
+                        </div>
                     </div>
                 </div>
             </div>

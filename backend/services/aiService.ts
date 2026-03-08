@@ -4,8 +4,7 @@ import { PersonProfile, PersonhoodNote } from '../../shared/types';
 // Template-based generation that mimics what Gemini Flash would produce
 
 export async function generatePersonhoodNote(
-    profile: PersonProfile,
-    hcpMode: boolean
+    profile: PersonProfile
 ): Promise<PersonhoodNote> {
     const points: string[] = [];
     const highlights: string[] = [];
@@ -57,19 +56,6 @@ export async function generatePersonhoodNote(
         }
     }
 
-    // HCP guidance
-    let hcpGuidance: string[] | undefined;
-    if (hcpMode) {
-        hcpGuidance = [
-            'Validate their emotions before correcting facts',
-            'Avoid saying "Don\'t you remember?"',
-            'Use gentle redirection if they seem confused',
-            'Maintain eye contact and speak slowly',
-            'Focus on feelings, not factual accuracy'
-        ];
-
-    }
-
     return {
         profileId: profile.id,
         name: profile.name,
@@ -80,7 +66,6 @@ export async function generatePersonhoodNote(
         memorySpark,
         careTip,
         highlights: highlights.slice(0, 2),
-        hcpGuidance,
         generatedAt: new Date().toISOString()
     };
 }

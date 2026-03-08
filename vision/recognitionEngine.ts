@@ -3,7 +3,7 @@
 
 import { CursorPoint, FaceBoundingBox, RecognitionEvent, PersonhoodNote } from '../shared/types';
 
-import { getFaceMatcher, FaceWithDescriptor } from './faceDetection';
+import { getBestFaceMatch, getFaceMatcher } from './faceDetection';
 import { PersonProfile } from '../shared/types';
 import * as faceapi from 'face-api.js';
 
@@ -21,11 +21,15 @@ export interface ActiveHoverState {
     faceId: string;
     profileId?: string;
     progress: number;
+    confidence: 'high' | 'low' | 'none';
+    distance?: number;
 }
 
 interface DwellTracker {
     faceId: string;
     profileId?: string;
+    matchConfidence: 'high' | 'low' | 'none';
+    matchDistance?: number;
     startTime: number;
     lastSeen: number;
     triggered: boolean;
@@ -41,7 +45,6 @@ let activeHoveredFaceId: string | null = null;
 
 // Instead of manual string mapping, we use FaceMatcher
 let faceMatcher: faceapi.FaceMatcher | null = null;
-let hcpMode = false;
 
 // Build the FaceMatcher from available profiles
 export function updateFaceMatcher(profiles: PersonProfile[]): void {
@@ -67,17 +70,9 @@ export function getLinkedProfileMatching(descriptor?: Float32Array): string | un
     console.log(`[MUNINN] Descriptor sum: ${sum}`);
     if (sum === 0) return undefined;
 
-    const match = faceMatcher.findBestMatch(descriptor);
-    console.log(`[MUNINN] Face match attempt: ${match.label} (Distance: ${match.distance.toFixed(3)})`);
-    return match.label !== 'unknown' ? match.label : undefined;
-}
-
-export function setHcpMode(enabled: boolean): void {
-    hcpMode = enabled;
-}
-
-export function isHcpMode(): boolean {
-    return hcpMode;
+    const match = getBestFaceMatch(descriptor);
+    console.log(`[MUNINN] Face match attempt: ${match.profileId ?? 'unknown'} (Distance: ${match.distance?.toFixed(3) ?? 'n/a'}, Confidence: ${match.confidence})`);
+    return match.confidence === 'high' ? match.profileId : undefined;
 }
 
 export function processCursorFaceIntersection(
@@ -99,15 +94,16 @@ export function processCursorFaceIntersection(
     activeHoveredFaceId = hoveredFace?.id ?? null;
 
     if (hoveredFace) {
-        const trackerKey = getTrackerKey(hoveredFace);
+        const matchResult = getFaceMatchForTracker(hoveredFace.descriptor);
+        const trackerKey = getTrackerKey(hoveredFace, matchResult);
         let tracker = dwellTrackers.get(trackerKey);
 
         if (!tracker) {
-            const matchedProfileId = getLinkedProfileMatching(hoveredFace.descriptor);
-
             tracker = {
                 faceId: hoveredFace.id,
-                profileId: matchedProfileId,
+                profileId: matchResult.profileId,
+                matchConfidence: matchResult.confidence,
+                matchDistance: matchResult.distance,
                 startTime: now,
                 lastSeen: now,
                 triggered: false,
@@ -119,20 +115,19 @@ export function processCursorFaceIntersection(
             dwellTrackers.set(trackerKey, tracker);
         } else {
             tracker.faceId = hoveredFace.id;
+            tracker.profileId = matchResult.profileId;
+            tracker.matchConfidence = matchResult.confidence;
+            tracker.matchDistance = matchResult.distance;
             tracker.lastSeen = now;
             tracker.faceX = hoveredFace.x;
             tracker.faceY = hoveredFace.y;
             tracker.faceWidth = hoveredFace.width;
             tracker.faceHeight = hoveredFace.height;
-
-            if (!tracker.profileId) {
-                tracker.profileId = getLinkedProfileMatching(hoveredFace.descriptor);
-            }
         }
 
         const hoverTime = now - tracker.startTime;
 
-        if (hoverTime >= HOVER_THRESHOLD_MS && !tracker.triggered && tracker.profileId) {
+        if (hoverTime >= HOVER_THRESHOLD_MS && !tracker.triggered && tracker.profileId && tracker.matchConfidence === 'high') {
             tracker.triggered = true;
             triggerRecognitionEvent(tracker, hoverTime);
         }
@@ -178,9 +173,25 @@ function findHoveredFace(
     );
 }
 
-function getTrackerKey(face: import('./faceDetection').FaceWithDescriptor): string {
-    const matchedProfileId = getLinkedProfileMatching(face.descriptor);
-    return matchedProfileId ? `profile:${matchedProfileId}` : `face:${face.id}`;
+function getFaceMatchForTracker(descriptor?: Float32Array): { profileId?: string; confidence: 'high' | 'low' | 'none'; distance?: number } {
+    if (!descriptor) {
+        return { confidence: 'none' };
+    }
+
+    let sum = 0;
+    for (let i = 0; i < descriptor.length; i++) sum += Math.abs(descriptor[i]);
+    if (sum === 0) {
+        return { confidence: 'none' };
+    }
+
+    return getBestFaceMatch(descriptor);
+}
+
+function getTrackerKey(
+    face: import('./faceDetection').FaceWithDescriptor,
+    matchResult: { profileId?: string; confidence: 'high' | 'low' | 'none' }
+): string {
+    return matchResult.confidence === 'high' && matchResult.profileId ? `profile:${matchResult.profileId}` : `face:${face.id}`;
 }
 
 function isPointInBox(x: number, y: number, box: FaceBoundingBox, padding = 20): boolean {
@@ -228,8 +239,7 @@ async function triggerRecognitionEvent(tracker: DwellTracker, dwellTime: number)
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                profileId: event.profileId,
-                hcpMode
+                profileId: event.profileId
             })
         });
 
@@ -271,7 +281,9 @@ export function getActiveHoverState(): ActiveHoverState | null {
     return {
         faceId: tracker.faceId,
         profileId: tracker.profileId,
-        progress: getDwellProgress(tracker.faceId)
+        progress: getDwellProgress(tracker.faceId),
+        confidence: tracker.matchConfidence,
+        distance: tracker.matchDistance
     };
 }
 

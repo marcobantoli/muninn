@@ -2,7 +2,7 @@
 
 **AI-Augmented Personhood Retrieval for Dementia Support**
 
-MUNINN is an Electron desktop prototype that detects when a user is looking at someone on their screen and automatically provides contextual identity reminders. Designed to assist dementia patients and healthcare professionals during digital communication.
+MUNINN is an Electron desktop prototype that detects when a user is looking at someone on their screen and automatically provides contextual identity reminders. Designed to assist dementia patients during digital communication.
 
 ## The Recognition Loop
 
@@ -48,7 +48,6 @@ On first backend startup, MUNINN seeds the Firestore `profiles` collection autom
 
 ## Features
 
-- **HCP Mode** — Toggle healthcare professional guidance in overlays
 - **Biometric Signal** — Simulated heart rate (60–120 BPM); elevated HR prioritizes emotional anchors
 - **Cursor Recognition** — Hover-based recognition targeting over detected faces
 - **Seed Profiles** — 4 pre-loaded profiles (Sarah, James, Margaret, Dr. Patel)

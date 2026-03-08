@@ -48,7 +48,6 @@ export interface PersonhoodNote {
     memorySpark?: string;
     careTip?: string;
     highlights?: string[];
-    hcpGuidance?: string[];
     generatedAt: string;
 }
 
@@ -56,7 +55,8 @@ export interface HoverPreview {
     title: string;
     subtitle: string;
     progress: number;
-    isRecognized: boolean;
+    status: 'recognized' | 'low-confidence' | 'unrecognized';
+    distance?: number;
 }
 
 export interface OverlayData {
@@ -70,7 +70,6 @@ export interface OverlayData {
 export interface AppState {
     isCapturing: boolean;
     isCalibrated: boolean;
-    hcpMode: boolean;
     detectedFaces: any[];
     activeRecognition: PersonhoodNote | null;
 }
